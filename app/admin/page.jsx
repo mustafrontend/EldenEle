@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getAllListings, getAllUsers, deleteUser, deleteListing, getAllMessages, toggleUserFeatured, getBotStatus, updateBotStatus, createAdminFakeListing, adminUpdateUser, adminUpdateListing, uploadPhotos, getAllVisitors } from '../../lib/listingService';
-import { getAllPosts, deletePost, createAdminFakePost, adminUpdatePost } from '../../lib/communityService';
+import { getAllPosts, deletePost, createAdminFakePost, adminUpdatePost, subscribeComments, createComment } from '../../lib/communityService';
 import AppHeader from '../../components/AppHeader';
 
 export default function AdminPage() {
@@ -200,12 +200,13 @@ export default function AdminPage() {
                 </div>
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 mb-10">
                     <Card title="Toplam Kullanıcı" value={users.length} icon="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" color="blue" />
                     <Card title="Toplam İlan" value={listings.length} icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" color="emerald" />
                     <Card title="Topluluk Gönderisi" value={posts.length} icon="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" color="amber" />
                     <Card title="Ağ Ziyaretçisi" value={visitors.length} icon="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" color="indigo" />
                     <Card title="Gönderilen Mesaj" value={messages.length} icon="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" color="rose" />
+                    <Card title="WhatsApp Tıklama" value={listings.reduce((sum, l) => sum + (l.whatsappClicks || 0), 0)} icon="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" color="emerald" />
                 </div>
 
                 {/* Tabs */}
@@ -280,6 +281,7 @@ function SummaryTab({ listings, posts }) {
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tür</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Başlık_İçerik</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Sahibi</th>
+                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">WhatsApp</th>
                             <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İzlenme</th>
                         </tr>
                     </thead>
@@ -293,6 +295,9 @@ function SummaryTab({ listings, posts }) {
                                 </td>
                                 <td className="py-4 px-4 text-sm font-bold text-slate-900">{item.title}</td>
                                 <td className="py-4 px-4 text-sm text-slate-500">{item.userName}</td>
+                                <td className="py-4 px-4 text-right">
+                                    <span className="bg-[#25D366] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{item.whatsappClicks || 0}</span>
+                                </td>
                                 <td className="py-4 px-4 text-right">
                                     <span className="bg-slate-900 text-white text-xs font-black px-3 py-1 rounded-full border border-white/10">{item.views || 0}</span>
                                 </td>
@@ -713,6 +718,10 @@ function ListingRow({ l, onDelete }) {
             {/* İstatistik & Save */}
             <td className="py-4 px-4">
                 <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-center bg-[#25D366] text-white px-2 py-1 rounded-lg">
+                        <span className="text-[10px] font-black leading-none">{l.whatsappClicks || 0}</span>
+                        <span className="text-[7px] uppercase font-bold opacity-80">WP</span>
+                    </div>
                     <div className="flex flex-col items-center bg-slate-900 text-white px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-black leading-none">{l.views || 0}</span>
                         <span className="text-[7px] uppercase font-bold opacity-50">Göz</span>
@@ -936,6 +945,7 @@ function PostRow({ p, onDelete }) {
     const [type, setType] = useState(p.type || 'soru');
     const [imageUrl, setImageUrl] = useState(p.imageUrl || null);
     const [loading, setLoading] = useState(false);
+    const [showComments, setShowComments] = useState(false);
     const fileRef = useRef(null);
 
     async function handleUpdate() {
@@ -962,60 +972,163 @@ function PostRow({ p, onDelete }) {
     }
 
     return (
-        <tr className="hover:bg-slate-50/50 transition-colors">
-            <td className="py-4 px-4">
-                <div className="flex items-center gap-4">
-                    <div
-                        onClick={() => fileRef.current?.click()}
-                        className="relative w-12 h-12 flex-shrink-0 cursor-pointer group/postphoto"
-                    >
-                        {imageUrl ? (
-                            <img src={imageUrl} className="w-full h-full rounded-xl object-cover border border-slate-200 shadow-sm" />
-                        ) : (
-                            <div className="w-full h-full rounded-xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center text-[8px] text-slate-400 font-black">EKLE</div>
-                        )}
-                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover/postphoto:opacity-100 flex items-center justify-center transition-opacity">
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+        <>
+            <tr className={`hover:bg-slate-50/50 transition-colors ${showComments ? 'bg-indigo-50/30' : ''}`}>
+                <td className="py-4 px-4">
+                    <div className="flex items-center gap-4">
+                        <div
+                            onClick={() => fileRef.current?.click()}
+                            className="relative w-12 h-12 flex-shrink-0 cursor-pointer group/postphoto"
+                        >
+                            {imageUrl ? (
+                                <img src={imageUrl} className="w-full h-full rounded-xl object-cover border border-slate-200 shadow-sm" />
+                            ) : (
+                                <div className="w-full h-full rounded-xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center text-[8px] text-slate-400 font-black">EKLE</div>
+                            )}
+                            <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover/postphoto:opacity-100 flex items-center justify-center transition-opacity">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            </div>
+                            <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={onUpload} />
                         </div>
-                        <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={onUpload} />
+                        <div className="flex-1">
+                            <textarea
+                                value={content}
+                                onChange={e => setContent(e.target.value)}
+                                className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-800 resize-none min-h-[40px]"
+                            />
+                            <div className="text-[10px] text-slate-400 mt-1 uppercase font-black">Yazar: {p.userName}</div>
+                        </div>
                     </div>
-                    <div className="flex-1">
-                        <textarea
-                            value={content}
-                            onChange={e => setContent(e.target.value)}
-                            className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-800 resize-none min-h-[40px]"
-                        />
-                        <div className="text-[10px] text-slate-400 mt-1">Yazar: {p.userName}</div>
-                    </div>
-                </div>
-            </td>
-            <td className="py-4 px-4">
-                <select
-                    value={type}
-                    onChange={e => setType(e.target.value)}
-                    className="text-[10px] font-bold px-2 py-1 bg-slate-100 rounded text-slate-600 uppercase border-none outline-none appearance-none"
-                >
-                    <option value="soru">Soru</option>
-                    <option value="talep">Talep</option>
-                </select>
-            </td>
-            <td className="py-4 px-4 text-xs font-medium text-slate-500">
-                {p.commentCount || 0} Y / {p.likeCount || 0} B
-            </td>
-            <td className="py-4 px-4">
-                <div className="flex items-center gap-2">
-                    <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{p.views || 0}</span>
-                    <button onClick={handleUpdate} disabled={loading} className="text-emerald-600 hover:scale-110 active:scale-95 transition-all">
-                        {loading ? '...' : '✓'}
+                </td>
+                <td className="py-4 px-4">
+                    <select
+                        value={type}
+                        onChange={e => setType(e.target.value)}
+                        className="text-[10px] font-black px-2 py-1 bg-white border border-slate-200 rounded text-slate-600 uppercase outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                        <option value="soru">Soru</option>
+                        <option value="talep">Talep</option>
+                    </select>
+                </td>
+                <td className="py-4 px-4">
+                    <button
+                        onClick={() => setShowComments(!showComments)}
+                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${showComments ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'}`}
+                    >
+                        <svg className={`w-4 h-4 ${showComments ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span className="text-xs font-black">{p.commentCount || 0}</span>
                     </button>
-                </div>
-            </td>
-            <td className="py-4 px-4 text-right">
-                <button onClick={() => onDelete(p.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <div className="text-[9px] text-slate-400 mt-1 ml-1 font-bold">{p.likeCount || 0} Beğeni</div>
+                </td>
+                <td className="py-4 px-4">
+                    <div className="flex items-center gap-2">
+                        <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{p.views || 0}</span>
+                        <button onClick={handleUpdate} disabled={loading} className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all">
+                            {loading ? '...' : '✓'}
+                        </button>
+                    </div>
+                </td>
+                <td className="py-4 px-4 text-right">
+                    <button onClick={() => onDelete(p.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                </td>
+            </tr>
+            {showComments && (
+                <tr>
+                    <td colSpan="5" className="px-8 pb-8 bg-indigo-50/30">
+                        <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <AdminComments postId={p.id} />
+                        </div>
+                    </td>
+                </tr>
+            )}
+        </>
+    );
+}
+
+function AdminComments({ postId }) {
+    const [comments, setComments] = useState([]);
+    const [newReply, setNewReply] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const unsub = subscribeComments(postId, (data) => {
+            setComments(data);
+        });
+        return () => unsub();
+    }, [postId]);
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (!newReply.trim()) return;
+        setLoading(true);
+        try {
+            await createComment({ postId, content: newReply.trim(), isAdminReply: true });
+            setNewReply('');
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="space-y-4">
+            <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Yanıtlar ve Yönetim</h4>
+
+            <div className="space-y-4 max-h-80 overflow-y-auto pr-2 scrollbar-thin">
+                {comments.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-400 font-medium italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">Henüz yorum yok. İlk yanıtı siz verin.</div>
+                ) : (
+                    comments.map(c => (
+                        <div key={c.id} className="group/admincomm">
+                            <div className="flex gap-3">
+                                {!c.isAdmin && (
+                                    <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-slate-200 ring-2 ring-white shadow-sm flex items-center justify-center text-[10px] font-bold text-slate-500 uppercase mt-1">
+                                        {(c.userName || 'U')[0]}
+                                    </div>
+                                )}
+                                <div className={`flex-1 px-4 py-3 rounded-2xl border transition-all duration-300 ${c.isAdmin
+                                    ? 'bg-white border-2 border-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.08)] relative overflow-hidden'
+                                    : 'bg-slate-50 border-slate-200'
+                                    }`}>
+                                    {c.isAdmin && (
+                                        <div className="absolute top-0 right-0 px-2.5 py-1 bg-red-600 text-[7px] font-black text-white uppercase tracking-tighter rounded-bl-lg shadow-sm">
+                                            RESMİ
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-2 font-black text-[12px] tracking-tight">
+                                            <span className={c.isAdmin ? 'text-red-700 uppercase' : 'text-slate-900 italic opacity-80'}>{c.userName}</span>
+                                        </div>
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase">{c.createdAt?.seconds ? new Date(c.createdAt.seconds * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                                    </div>
+                                    <p className={`text-[12px] leading-relaxed ${c.isAdmin ? 'text-slate-900 font-bold' : 'text-slate-600'}`}>{c.content}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+                <input
+                    value={newReply}
+                    onChange={e => setNewReply(e.target.value)}
+                    placeholder="Admin olarak yanıtla..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 transition-all placeholder:text-slate-300"
+                />
+                <button
+                    disabled={loading || !newReply.trim()}
+                    className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-all active:scale-[0.98] shadow-lg shadow-red-200"
+                >
+                    {loading ? '...' : 'Yanıtla'}
                 </button>
-            </td>
-        </tr>
+            </form>
+        </div>
     );
 }
 
@@ -1051,30 +1164,30 @@ function PostsTab({ posts, onDelete, onRefresh }) {
 
             {/* Fake Gönderi Formu */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8">
-                <h3 className="font-bold text-slate-800 mb-4 text-sm flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 mb-4 text-[11px] uppercase tracking-widest flex items-center gap-2">
                     <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    Manuel Bot (Sahte İsimle Paylaşım Yap)
+                    Sistem Botu / Duyuru Paylaş
                 </h3>
                 <form onSubmit={handleFakeSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Sahte İsim</label>
-                            <input value={fakeName} onChange={e => setFakeName(e.target.value)} type="text" placeholder="Örn: Ahmet Yılmaz" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-slate-800 outline-none" required />
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Paylaşan İsim (Sahte/Gerçek)</label>
+                            <input value={fakeName} onChange={e => setFakeName(e.target.value)} type="text" placeholder="Örn: EldenEle Admin" className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold focus:ring-1 focus:ring-slate-800 outline-none transition-all" required />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Gönderi Türü</label>
-                            <select value={fakeType} onChange={e => setFakeType(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-slate-800 outline-none">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">İçerik Kategorisi</label>
+                            <select value={fakeType} onChange={e => setFakeType(e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold focus:ring-1 focus:ring-slate-800 outline-none transition-all">
                                 <option value="soru">Soru</option>
                                 <option value="talep">Talep</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">İçerik</label>
-                        <textarea value={fakeContent} onChange={e => setFakeContent(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-slate-800 outline-none min-h-[60px]" placeholder="Konu nedir?" required></textarea>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Mesaj İçeriği</label>
+                        <textarea value={fakeContent} onChange={e => setFakeContent(e.target.value)} className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold focus:ring-1 focus:ring-slate-800 outline-none min-h-[60px] transition-all" placeholder="Topluluğa ne söylemek istersin?" required></textarea>
                     </div>
-                    <button type="submit" disabled={loading} className="px-5 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-slate-800 disabled:opacity-50 transition-all flex items-center gap-2">
-                        {loading ? "Gönderiliyor..." : "Bot Gönderisi Ekle"}
+                    <button type="submit" disabled={loading} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-200 hover:bg-slate-800 disabled:opacity-50 transition-all active:scale-[0.98]">
+                        {loading ? "..." : "Şimdi Yayınla"}
                     </button>
                 </form>
             </div>
@@ -1085,9 +1198,9 @@ function PostsTab({ posts, onDelete, onRefresh }) {
                         <tr className="border-b border-slate-100 italic">
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İçerik</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tür</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Etkileşim</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Yorumlar</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İzlenme</th>
-                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İşlem</th>
+                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aksiyon</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">

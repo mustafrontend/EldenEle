@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getListing, subscribeListings, incrementListingView } from '../../../lib/listingService';
+import { getListing, subscribeListings, incrementListingView, incrementWhatsAppClick } from '../../../lib/listingService';
 import { useAuth } from '../../../lib/AuthContext';
 import { normalizePhoneForWhatsApp, formatPhoneForDisplay } from '../../../lib/utils';
 import AppHeader from '../../../components/AppHeader';
@@ -101,6 +101,12 @@ export default function ListingDetailClient({ slug, serverListing }) {
         if (!user) { router.push('/giris'); return; }
         setShowMessage(true);
     }
+
+    const handleWhatsAppClick = () => {
+        if (listing?.id) {
+            incrementWhatsAppClick(listing.id);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20 sm:pb-0">
@@ -257,6 +263,7 @@ export default function ListingDetailClient({ slug, serverListing }) {
                                                 href={`https://api.whatsapp.com/send?phone=${(listing.userPhone || '').toString().split('').filter(c => /\d/.test(c)).join('').replace(/^00/, '').replace(/^0/, '').replace(/^90/, '90').replace(/^(5)/, '90$1')}&text=${encodeURIComponent(`Selamlar, EldenEle.Pati üzerinden "${listing.title}" ilanınız için ulaşıyorum. Can dostumuz ile ilgileniyorum.`)}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
+                                                onClick={handleWhatsAppClick}
                                                 className="col-span-2 sm:col-span-1 sm:flex-1 flex items-center justify-center gap-2 py-3.5 sm:py-4 rounded-[1.2rem] bg-[#25D366] text-white text-sm font-extrabold border-[0.5px] border-[#1fad54] shadow-sm active:scale-[0.96] active:opacity-90 transition-all duration-150"
                                             >
                                                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
