@@ -144,7 +144,7 @@ export default function LiveNotifications() {
 
     return (
         <div
-            className={`fixed bottom-24 sm:bottom-6 left-4 z-[110] transition-all duration-500 max-w-[280px] sm:max-w-xs ${visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
+            className={`fixed bottom-[110px] sm:bottom-6 left-4 z-[110] transition-all duration-500 max-w-[280px] sm:max-w-xs ${visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
                 }`}
         >
             <div className={`flex items-center gap-3 p-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border backdrop-blur-xl ${notification.color}`}>

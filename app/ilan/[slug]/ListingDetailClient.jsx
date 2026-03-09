@@ -19,10 +19,13 @@ function formatDate(ts) {
 function getStyling(listing) {
     if (!listing) return {};
     const c = listing.concept;
-    if (c === 'sahiplendirme') return { label: '🐾 Sahiplendirme', badge: 'bg-orange-50 text-orange-700 border-orange-200', val: 'ÜCRETSİZ' };
-    if (c === 'bedelsiz') return { label: '🎁 Destek / Hediye', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', val: 'HEDİYE' };
-    if (c === 'takas') return { label: '🔄 Pati Takas', badge: 'bg-blue-50 text-blue-700 border-blue-200', val: 'TAKAS' };
-    return { label: 'İlan', badge: 'bg-slate-100 text-slate-700 border-slate-200', val: 'AKTİF' };
+    if (c === 'sahiplendirme') return { label: 'Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
+    if (c === 'sahiplenmek-istiyorum') return { label: 'Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
+    if (c === 'ciftlestirme') return { label: 'Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
+    if (c === 'otel') return { label: 'Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: listing.estimatedValue ? `₺${listing.estimatedValue}` : 'FİYAT SORUN' };
+    if (c === 'bedelsiz') return { label: 'Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
+    if (c === 'takas') return { label: 'Pati Takas', badge: 'bg-blue-50 text-blue-600 border-blue-200', hover: 'hover:border-blue-200', textHover: 'group-hover:text-blue-500', val: 'TAKAS' };
+    return { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
 }
 
 export default function ListingDetailClient({ slug, serverListing }) {
@@ -46,6 +49,21 @@ export default function ListingDetailClient({ slug, serverListing }) {
             .filter(l => l.id !== listing.id && l.category === listing.category)
             .slice(0, 4);
     }, [allListings, listing]);
+
+    const eldeneleBenefits = useMemo(() => [
+        { title: "İlk Mama & Online Destek", desc: "Bu can dostumuzu sahiplendiğinizde ilk maması ve 1 aylık ücretsiz online veteriner danışmanlığı bizim hediyemiz!" },
+        { title: "Oyuncak & Eğitim Desteği", desc: "EldenEle Özel Şanslı Yuva Paketi: Seçili oyuncaklar ve uzmanımızdan online temel adaptasyon rehberliği bizden!" },
+        { title: "Online Adaptasyon", desc: "EldenEle uzmanlarından ücretsiz online eve alışma eğitimi ve sürpriz mama paketi kapınıza geliyor!" },
+        { title: "Yuva Hediyesi Seti", desc: "Bu ilanı sahiplenirseniz, can dostumuzun ilk oyuncak seti ve online veteriner danışmanlığınız tamamen ücretsiz!" },
+        { title: "Beslenme Paketiniz", desc: "İlk beslenme paketiniz ve uzman online hekim desteği EldenEle güvencesi ile tamamen sizinle!" }
+    ], []);
+
+    const benefitData = useMemo(() => {
+        if (!listing?.id) return eldeneleBenefits[0];
+        let sum = 0;
+        for (let i = 0; i < listing.id.length; i++) sum += listing.id.charCodeAt(i);
+        return eldeneleBenefits[sum % eldeneleBenefits.length];
+    }, [listing?.id, eldeneleBenefits]);
 
     useEffect(() => {
         if (!serverListing) {
@@ -159,11 +177,20 @@ export default function ListingDetailClient({ slug, serverListing }) {
                                 <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-900 leading-tight mb-6 tracking-tight" itemProp="name">{listing.title}</h1>
 
                                 <div className="flex items-end gap-3 mb-8" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                                    <span className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter" itemProp="price" content={listing.estimatedValue || 0}>{styling.val}</span>
+                                    <span className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter" itemProp="price" content={listing.estimatedValue || 0}>
+                                        {styling.val}
+                                        {listing.concept === 'otel' && listing.estimatedValue > 0 && <span className="text-base font-bold text-slate-400 ml-1.5">/gün</span>}
+                                    </span>
                                     <meta itemProp="priceCurrency" content="TRY" />
                                     <meta itemProp="availability" content="https://schema.org/InStock" />
                                     {listing.concept === 'sahiplendirme' && (
                                         <span className="text-xs font-black text-orange-500 bg-orange-50 px-3 py-1 rounded-lg mb-1 tracking-widest uppercase">Ömürlük Yuva</span>
+                                    )}
+                                    {listing.concept === 'otel' && (
+                                        <span className="text-xs font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-lg mb-1 tracking-widest uppercase">Konaklama / Bakım</span>
+                                    )}
+                                    {listing.concept === 'ciftlestirme' && (
+                                        <span className="text-xs font-black text-purple-500 bg-purple-50 px-3 py-1 rounded-lg mb-1 tracking-widest uppercase">Eş Arayışı</span>
                                     )}
                                 </div>
 
@@ -193,6 +220,22 @@ export default function ListingDetailClient({ slug, serverListing }) {
                                         )}
                                     </div>
                                 </div>
+
+                                {listing.userIsFeatured && (
+                                    <div className="mt-8 mb-2 bg-gradient-to-tr from-orange-50 to-amber-50/40 border border-orange-100/60 rounded-2xl p-5 shadow-sm">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                                                <svg className="w-4 h-4 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                            </div>
+                                            <h3 className="font-black text-orange-700 uppercase tracking-widest text-[12px] sm:text-[13px]">
+                                                EldenEle Özel: {benefitData.title}
+                                            </h3>
+                                        </div>
+                                        <p className="text-[13px] sm:text-[14px] text-slate-700 font-bold leading-relaxed ml-11">
+                                            {benefitData.desc}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {listing.description && (
                                     <div className="py-6 flex-1">

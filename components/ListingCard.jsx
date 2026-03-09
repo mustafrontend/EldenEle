@@ -7,10 +7,18 @@ import { generateListingSlug } from '../lib/seo';
 function getStyling(listing) {
     const c = listing.concept;
     if (c === 'sahiplendirme') return { label: '🐾 Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
+    if (c === 'sahiplenmek-istiyorum') return { label: '🏠 Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
+    if (c === 'ciftlestirme') return { label: '💑 Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
+    if (c === 'otel') return { label: '🏨 Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: 'OTEL' };
+    if (c === 'gezdirme') return { label: '🦮 Pati Gezdirme', badge: 'bg-amber-50 text-amber-600 border-amber-200', hover: 'hover:border-amber-200', textHover: 'group-hover:text-amber-500', val: 'GEZDİRME' };
+    if (c === 'kayip') return { label: '🚨 Kayıp / Bulunan', badge: 'bg-red-50 text-red-600 border-red-200', hover: 'hover:border-red-200', textHover: 'group-hover:text-red-600', val: 'KAYIP' };
+    if (c === 'transfer') return { label: '🚕 Pati Transfer', badge: 'bg-cyan-50 text-cyan-600 border-cyan-200', hover: 'hover:border-cyan-200', textHover: 'group-hover:text-cyan-600', val: 'TRANSFER' };
+    if (c === 'kan-bagisi') return { label: '🩸 Kan Bağışı İhtiyacı', badge: 'bg-red-50 text-red-700 border-red-200 shadow-sm', hover: 'hover:border-red-300', textHover: 'group-hover:text-red-700', val: 'ACİL' };
     if (c === 'bedelsiz') return { label: '🎁 Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
     if (c === 'takas') return { label: '🔄 Pati Takas', badge: 'bg-blue-50 text-blue-600 border-blue-200', hover: 'hover:border-blue-200', textHover: 'group-hover:text-blue-500', val: 'TAKAS' };
     return { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
 }
+
 
 function formatDate(ts) {
     if (!ts?.seconds) return '';
@@ -21,6 +29,21 @@ export default function ListingCard({ listing, isFavorite, onToggleFavorite, sho
     const styling = useMemo(() => getStyling(listing), [listing]);
     // Use stored slug or generate on-the-fly for old listings
     const listingSlug = generateListingSlug(listing);
+
+    const eldeneleBenefits = useMemo(() => [
+        "Profesyonel Online Veteriner Danışmanlığı ve İlk Beslenme Desteği!",
+        "EldenEle Özel: Uzman Eğitmen Eşliğinde Online Adaptasyon Desteği!",
+        "Yeni Yuvanızda İlk Adım: Profesyonel Davranış Bilimleri Danışmanlığı!",
+        "Ömürlük Dostluklara Uzman Dokunuşu: Online Hekim ve Gelişim Takibi!",
+        "Bilinçli Sahiplenme: Uzman Onaylı Beslenme Programı ve Danışmanlık Hizmeti!"
+    ], []);
+
+    const benefitText = useMemo(() => {
+        if (!listing.id) return eldeneleBenefits[0];
+        let sum = 0;
+        for (let i = 0; i < listing.id.length; i++) sum += listing.id.charCodeAt(i);
+        return eldeneleBenefits[sum % eldeneleBenefits.length];
+    }, [listing.id, eldeneleBenefits]);
 
     // Dynamic fake visitor count based on deterministic ID or title length
     const viewingCount = useMemo(() => {
@@ -78,7 +101,17 @@ export default function ListingCard({ listing, isFavorite, onToggleFavorite, sho
                     <div className="flex items-center gap-2 mb-2">
                         <span className={`${styling.badge} text-[9px] font-black px-2 py-0.5 rounded-md border tracking-widest uppercase`}>{styling.label}</span>
                     </div>
-                    <h3 className={`${styling.textHover} font-black text-slate-900 text-[15px] leading-tight line-clamp-2 mb-4 transition-colors tracking-tight`}>{listing.title}</h3>
+                    <h3 className={`${styling.textHover} font-black text-slate-900 text-[15px] leading-tight line-clamp-2 mb-2 transition-colors tracking-tight`}>{listing.title}</h3>
+
+                    {listing.userIsFeatured && (
+                        <div className="bg-gradient-to-tr from-orange-50 to-amber-50/30 border border-orange-100/50 rounded-xl p-2.5 mb-3">
+                            <span className="flex items-center gap-1.5 text-[10px] font-black text-orange-600 uppercase tracking-tighter">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                EldenEle Özel
+                            </span>
+                            <span className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mt-1 leading-[1.3]">{benefitText}</span>
+                        </div>
+                    )}
 
                     {/* Desktop Actions */}
                     {showActions && (
@@ -165,6 +198,15 @@ export default function ListingCard({ listing, isFavorite, onToggleFavorite, sho
                             )}
                         </div>
                         <h3 className="font-bold text-slate-900 text-[13px] leading-[1.3] line-clamp-2 tracking-tight">{listing.title}</h3>
+                        {listing.userIsFeatured && (
+                            <div className="mt-1.5 bg-gradient-to-tr from-orange-50 to-amber-50/30 border border-orange-100/50 rounded-md flex flex-col p-1.5">
+                                <div className="flex items-center gap-1 mb-0.5">
+                                    <svg className="w-3 h-3 text-orange-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <span className="text-[8px] font-black text-orange-600 uppercase tracking-widest">ELDENELE DESTEĞİ</span>
+                                </div>
+                                <span className="block text-[8px] font-bold text-slate-500 leading-tight">{benefitText}</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center justify-between mt-auto">

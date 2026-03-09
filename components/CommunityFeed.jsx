@@ -7,6 +7,7 @@ import { subscribePosts, togglePostLike } from '../lib/communityService';
 import CreatePost from './CreatePost';
 import InlineComments from './InlineComments';
 import { useAuth } from '../lib/AuthContext';
+import UserBadge from './UserBadge';
 
 function formatTimeAgo(ts) {
     if (!ts?.seconds) return '';
@@ -114,10 +115,10 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
             </div>
             <div className="space-y-3 relative z-10">
                 {recentListings.map(listing => (
-                    <Link key={listing.id} href={`/ilan/${listing.slug}`} className="flex gap-3 group hover:-translate-y-0.5 transition-all duration-200 bg-white border border-slate-100 p-2 rounded-xl">
+                    <Link key={listing.id} href={`/ilan/${listing.id}`} className="flex gap-3 group hover:-translate-y-0.5 transition-all duration-200 bg-white border border-slate-100 p-2 rounded-xl">
                         <div className="w-12 h-12 rounded-[10px] overflow-hidden bg-slate-50 shrink-0 border border-slate-200 group-hover:border-indigo-300 transition-colors">
-                            {listing.images && listing.images[0] ? (
-                                <img src={listing.images[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            {listing.photos && listing.photos[0] ? (
+                                <img src={listing.photos[0]} alt={listing.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-300">
                                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -191,8 +192,9 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="flex items-center gap-2 truncate">
-                                                    <span className="font-bold text-slate-800 text-[15px] truncate flex items-center gap-1.5">
+                                                    <span className="font-bold text-slate-800 text-[15px] truncate flex items-center gap-1.5 flex-wrap">
                                                         {post.userName}
+                                                        <UserBadge badges={post.userBadges} />
                                                         {post.userIsFeatured && (
                                                             <svg className="w-4 h-4 text-amber-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                                                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createListing, getListing, updateListing } from '../../lib/listingService';
+import { createListing, getListing, updateListing, invalidateListingsCache } from '../../lib/listingService';
 import { useAuth } from '../../lib/AuthContext';
 import { iller, getIlceler } from '../../data/turkiye';
 import AppHeader from '../../components/AppHeader';
@@ -11,9 +11,17 @@ import { petCategories } from '../../data/petCategories';
 
 const takasCategories = ['Mama', 'Aksesuar', 'Kafes / Yuva', 'Oyuncak', 'İlaç / Bakım', 'Akvaryum Malzemeleri', 'Diğer'];
 const bedelsizCategories = ['Ücretsiz Mama', 'Eşya Hibesi', 'Acil Destek / İlaç', 'Hediye Paketleri', 'Diğer'];
+const otelCategories = ['Pet Oteli / Pansiyon', 'Evde Bakıcı', 'Geçici Yuva / Host', 'Gündüz Bakımevi', 'Eğitim / Okul', 'Diğer'];
+const gezdirmeCategories = ['Köpek Gezdirme', 'Düzenli Gezdirme', 'Haftalık Yürüyüş', 'Diğer'];
+const transferCategories = ['Şehir İçi Transfer', 'Şehirler Arası Nakil', 'Havayolu Nakliyesi', 'VİP Pet Taksi', 'Diğer'];
+const kanBagisiCategories = ['Acil Kan Arayışı', 'Kan Donörü Olabilir', 'İlaç/Serum Desteği', 'Diğer'];
 
 function getCats(concept) {
-    if (concept === 'sahiplendirme') return petCategories.map(c => c.name);
+    if (['sahiplendirme', 'sahiplenmek-istiyorum', 'ciftlestirme', 'kayip'].includes(concept)) return petCategories.map(c => c.name);
+    if (concept === 'otel') return otelCategories;
+    if (concept === 'gezdirme') return gezdirmeCategories;
+    if (concept === 'transfer') return transferCategories;
+    if (concept === 'kan-bagisi') return kanBagisiCategories;
     if (concept === 'bedelsiz') return bedelsizCategories;
     return takasCategories;
 }
@@ -40,6 +48,14 @@ export default function CreateListingPage() {
     const [submitting, setSubmitting] = useState(false);
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState('');
+
+    // Quick Concept Selection
+    useEffect(() => {
+        const hizli = searchParams.get('hizli');
+        if (hizli && !isEditing) {
+            setConcept(hizli);
+        }
+    }, [searchParams, isEditing]);
 
     // Auth guard & Edit Mode Initializer
     useEffect(() => {
@@ -136,6 +152,8 @@ export default function CreateListingPage() {
             } else {
                 await createListing(data, photoFiles);
             }
+            // Yeni/güncellenmiş ilan anında görünsün diye cache'i temizle
+            invalidateListingsCache();
             router.push('/profil');
         } catch (err) {
             setError('İlan kaydedilirken hata oluştu. Tekrar deneyin.');
@@ -146,6 +164,13 @@ export default function CreateListingPage() {
 
     const concepts = [
         { key: 'sahiplendirme', label: 'Yuva Sahiplendir', desc: 'Can dostları yuvalandır', color: 'orange', icon: 'M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z' },
+        { key: 'sahiplenmek-istiyorum', label: 'Yuva Olmak İstiyorum', desc: 'Pati dostu arıyorum', color: 'rose', icon: 'M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a5.946 5.946 0 00-.942 3.197M12 10.5a3 3 0 110-6 3 3 0 010 6zM4.5 9.375a3 3 0 110-6 3 3 0 010 6zm15 0a3 3 0 110-6 3 3 0 010 6z' },
+        { key: 'ciftlestirme', label: 'Eş Yap / Çiftleştirme', desc: 'Dostunuza eş bulun', color: 'purple', icon: 'M11.649 6.79c.462-4.474 5.936-4.474 6.399 0 .34 3.295-3.199 4.316-3.199 4.316s-3.54-1.021-3.2-4.316zm-7.649 0c.462-4.474 5.936-4.474 6.399 0 .34 3.295-3.199 4.316-3.199 4.316s-3.54-1.021-3.2-4.316zm10 12.21c0 2.502-1.921 4.532-4.312 4.532-1.936 0-3.597-1.341-4.312-3.28m8.624 0c0-1.939-1.663-3.28-4.312-3.28-2.649 0-4.312 1.341-4.312 3.28' },
+        { key: 'otel', label: 'Pati Oteli / Bakıcı', desc: 'Otel ve konaklama hizmeti', color: 'indigo', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+        { key: 'gezdirme', label: 'Pati Gezdirme', desc: 'Köpek gezdirme hizmeti', color: 'amber', icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z' },
+        { key: 'kayip', label: 'Kayıp / Bulunan', desc: 'Acil durum ilanı ver', color: 'red', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+        { key: 'transfer', label: 'Pati Nakil / Taksi', desc: 'Pet taşıma hizmeti', color: 'cyan', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
+        { key: 'kan-bagisi', label: 'Kan Bağışı', desc: 'Acil kan/ilaç desteği', color: 'red', icon: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' },
         { key: 'takas', label: 'Pati Takas', desc: 'Mama ve aksesuar takasla', color: 'blue', icon: 'M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L13.5 12M21 7.5H7.5' },
         { key: 'bedelsiz', label: 'Destek / Hediye', desc: 'Ücretsiz yardım sağla', color: 'emerald', icon: 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z' },
     ];
@@ -157,14 +182,14 @@ export default function CreateListingPage() {
     }, [category]);
 
     function getConceptBorderClass(key) {
-        const colorMap = { takas: 'slate', yetenek: 'teal', bedelsiz: 'emerald', geridonusum: 'amber', odunc: 'blue', sahiplendirme: 'orange' };
+        const colorMap = { takas: 'blue', bedelsiz: 'emerald', sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'kan-bagisi': 'red' };
         const c = colorMap[key] || 'slate';
-        return concept === key ? `border-${c}-800 bg-${c}-50 text-${c}-900 shadow-sm` : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50';
+        return concept === key ? `border-${c}-800 bg-${c}-50 text-${c}-900 shadow-sm ring-1 ring-${c}-500/20` : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50';
     }
 
     function getCatActiveClass(cat) {
         if (category !== cat) return 'bg-white border-gray-300 text-gray-600';
-        const colorMap = { sahiplendirme: 'orange', bedelsiz: 'emerald', takas: 'blue' };
+        const colorMap = { sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', bedelsiz: 'emerald', takas: 'blue', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'kan-bagisi': 'red' };
         const c = colorMap[concept];
         if (c) return `bg-${c}-600 border-${c}-600 text-white`;
         return 'bg-slate-800 border-slate-800 text-white';
@@ -242,13 +267,17 @@ export default function CreateListingPage() {
 
                     {!['sahiplendirme', 'bedelsiz', 'odunc'].includes(concept) && (
                         <div>
-                            <label className="block text-sm font-semibold text-gray-800 mb-2">Tahmini Değer (₺)</label>
+                            <label className="block text-sm font-semibold text-gray-800 mb-2">
+                                {concept === 'otel' ? 'Fiyat Bilgisi (₺ / Günlük)' : 'Tahmini Değer (₺)'}
+                            </label>
                             <div className="relative">
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₺</span>
-                                <input value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} type="number" placeholder="Örn: 500" min="0"
+                                <input value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} type="number" placeholder={concept === 'otel' ? 'Örn: 150' : 'Örn: 500'} min="0"
                                     className="w-full border border-gray-300 rounded-lg px-4 pl-9 py-2.5 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-shadow" />
                             </div>
-                            <p className="text-xs text-gray-400 mt-1">Sadece takas veya satış referansı içindir, kesin değer olmak zorunda değil.</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {concept === 'otel' ? 'Talep ettiğiniz günlük ücret bilgisidir.' : 'Sadece takas veya satış referansı içindir, kesin değer olmak zorunda değil.'}
+                            </p>
                         </div>
                     )}
 
@@ -263,8 +292,8 @@ export default function CreateListingPage() {
                         </div>
                     </div>
 
-                    {/* Breed / Type selection for Sahiplendirme */}
-                    {concept === 'sahiplendirme' && category && currentBreeds.length > 0 && (
+                    {/* Breed / Type selection for Sahiplendirme or Adoption Request or Mating or Lost */}
+                    {(['sahiplendirme', 'sahiplenmek-istiyorum', 'ciftlestirme', 'kayip'].includes(concept)) && category && currentBreeds.length > 0 && (
                         <div className="animate-modal">
                             <label className="block text-sm font-semibold text-gray-800 mb-2">Tür / Irk <span className="text-red-500">*</span></label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-50/50 rounded-lg">
@@ -272,7 +301,7 @@ export default function CreateListingPage() {
                                     <button
                                         key={b}
                                         onClick={() => setBreed(b)}
-                                        className={`px-3 py-2 rounded-md border text-[11px] font-bold text-left transition-all ${breed === b ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-orange-300'}`}
+                                        className={`px-3 py-2 rounded-md border text-[11px] font-bold text-left transition-all ${breed === b ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'}`}
                                     >
                                         {b}
                                     </button>

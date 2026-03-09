@@ -55,9 +55,9 @@ export async function generateMetadata({ params }) {
 
     const ogImages = [];
     if (listing.photos && listing.photos.length > 0) {
-        if (listing.photos[0].startsWith('http')) {
-            ogImages.push({ url: listing.photos[0], width: 800, height: 600, alt: listing.title });
-        }
+        // We use our dynamic OG image generator API to circumvent base64 issues on WhatsApp/Twitter
+        const ogImageUrl = `${SITE_URL}/api/og-image/${listing.id}`;
+        ogImages.push({ url: ogImageUrl, width: 800, height: 600, alt: listing.title });
     }
 
     return {

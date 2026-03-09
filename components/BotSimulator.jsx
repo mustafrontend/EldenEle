@@ -376,7 +376,7 @@ const MOCK_BAIT_LISTINGS = [
 
 export default function BotSimulator() {
     const initialized = useRef(false);
-    const botConfig = useRef({ postsEnabled: true, listingsEnabled: true });
+    const botConfig = useRef({ postsEnabled: true, listingsEnabled: true, usersEnabled: false });
 
     useEffect(() => {
         if (initialized.current) return;
@@ -394,6 +394,7 @@ export default function BotSimulator() {
         const thirtyMinutes = 30 * 60 * 1000;
 
         const createBotUser = async () => {
+            if (!botConfig.current.usersEnabled) return; // Kullanıcı oluşturma isteğe bağlı durduruldu
             const randomName = MOCK_NAMES[Math.floor(Math.random() * MOCK_NAMES.length)];
             try {
                 await addDoc(collection(db, 'users'), {

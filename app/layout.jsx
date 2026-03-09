@@ -4,6 +4,8 @@ import { generateOrganizationJsonLd, generateWebSiteJsonLd, SITE_URL } from "../
 import ProgressBarProvider from "../components/ProgressBarProvider";
 import BotSimulator from "../components/BotSimulator";
 import LiveNotifications from "../components/LiveNotifications";
+import FeedbackButton from "../components/FeedbackButton";
+import VisitorTracker from "../components/VisitorTracker";
 
 export const metadata = {
     metadataBase: new URL(SITE_URL),
@@ -97,6 +99,8 @@ export default function RootLayout({ children }) {
                     <ProgressBarProvider>
                         <BotSimulator />
                         <LiveNotifications />
+                        <FeedbackButton />
+                        <VisitorTracker />
                         {children}
                     </ProgressBarProvider>
                 </AuthProvider>

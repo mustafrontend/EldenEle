@@ -10,6 +10,7 @@ import AppHeader from '../../components/AppHeader';
 import ListingCard from '../../components/ListingCard';
 import ChatModal from '../../components/ChatModal';
 import PetLoading from '../../components/PetLoading';
+import UserBadge from '../../components/UserBadge';
 
 function formatDate(ts) {
     if (!ts?.seconds) return '';
@@ -159,11 +160,12 @@ export default function ProfilePage() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center flex-wrap gap-2 mb-1">
                                 <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 truncate">
                                     {user.displayName || 'Kullanıcı'}
                                 </h1>
-                                <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-widest">AKTİF</span>
+                                <UserBadge badges={userData?.badges} />
+                                <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-widest shrink-0">AKTİF</span>
                             </div>
                             <p className="text-slate-400 text-xs sm:text-sm font-medium mb-1 truncate">{user.email}</p>
                             {userData?.phone && (

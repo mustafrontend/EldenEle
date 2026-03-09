@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getAllListings, getAllUsers, deleteUser, deleteListing, getAllMessages, toggleUserFeatured, getBotStatus, updateBotStatus, createAdminFakeListing, adminUpdateUser, adminUpdateListing, uploadPhotos } from '../../lib/listingService';
+import { getAllListings, getAllUsers, deleteUser, deleteListing, getAllMessages, toggleUserFeatured, getBotStatus, updateBotStatus, createAdminFakeListing, adminUpdateUser, adminUpdateListing, uploadPhotos, getAllVisitors } from '../../lib/listingService';
 import { getAllPosts, deletePost, createAdminFakePost, adminUpdatePost } from '../../lib/communityService';
 import AppHeader from '../../components/AppHeader';
 
@@ -15,6 +15,7 @@ export default function AdminPage() {
     const [listings, setListings] = useState([]);
     const [posts, setPosts] = useState([]);
     const [messages, setMessages] = useState([]);
+    const [visitors, setVisitors] = useState([]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('summary');
     const [botStatus, setBotStatus] = useState({ postsEnabled: true, listingsEnabled: true });
@@ -40,16 +41,18 @@ export default function AdminPage() {
     async function loadData() {
         setLoading(true);
         try {
-            const [u, l, p, m] = await Promise.all([
+            const [u, l, p, m, v] = await Promise.all([
                 getAllUsers(),
                 getAllListings(),
                 getAllPosts(),
-                getAllMessages()
+                getAllMessages(),
+                getAllVisitors()
             ]);
             setUsers(u);
             setListings(l);
             setPosts(p);
             setMessages(m);
+            setVisitors(v);
         } catch (e) {
             console.error(e);
         } finally {
@@ -201,13 +204,14 @@ export default function AdminPage() {
                     <Card title="Toplam Kullanıcı" value={users.length} icon="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" color="blue" />
                     <Card title="Toplam İlan" value={listings.length} icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" color="emerald" />
                     <Card title="Topluluk Gönderisi" value={posts.length} icon="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" color="amber" />
-                    <Card title="Toplam İzlenme" value={listings.reduce((acc, curr) => acc + (curr.views || 0), 0) + posts.reduce((acc, curr) => acc + (curr.views || 0), 0)} icon="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" color="indigo" />
+                    <Card title="Ağ Ziyaretçisi" value={visitors.length} icon="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" color="indigo" />
                     <Card title="Gönderilen Mesaj" value={messages.length} icon="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" color="rose" />
                 </div>
 
                 {/* Tabs */}
                 <div className="flex gap-2 p-1 bg-slate-200/50 rounded-2xl w-full sm:w-fit mb-8 overflow-x-auto whitespace-nowrap scrollbar-hide">
                     <Tab title="Özet" active={activeTab === 'summary'} onClick={() => setActiveTab('summary')} />
+                    <Tab title="Ziyaretçiler" active={activeTab === 'visitors'} onClick={() => setActiveTab('visitors')} />
                     <Tab title="Kullanıcılar" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
                     <Tab title="İlanlar" active={activeTab === 'listings'} onClick={() => setActiveTab('listings')} />
                     <Tab title="Gönderiler" active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
@@ -217,6 +221,7 @@ export default function AdminPage() {
                 {/* Tables */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
                     {activeTab === 'summary' && <SummaryTab listings={listings} posts={posts} />}
+                    {activeTab === 'visitors' && <VisitorsTab visitors={visitors} />}
                     {activeTab === 'users' && <UsersTab users={users} onDelete={handleDeleteUser} onToggleFeatured={handleToggleFeatured} />}
                     {activeTab === 'listings' && <ListingsTab listings={listings} users={users} onDelete={handleDeleteListing} onRefresh={loadData} />}
                     {activeTab === 'posts' && <PostsTab posts={posts} onDelete={handleDeletePost} onRefresh={loadData} />}
@@ -300,16 +305,159 @@ function SummaryTab({ listings, posts }) {
     );
 }
 
+function VisitorsTab({ visitors }) {
+    const [viewMode, setViewMode] = useState('grouped'); // 'grouped' or 'raw'
+
+    // Grouping logic
+    const grouped = visitors.reduce((acc, v) => {
+        const ip = v.ip || 'Bilinmiyor';
+        if (!acc[ip]) {
+            acc[ip] = {
+                ip,
+                count: 0,
+                lastVisit: null,
+                paths: new Set(),
+                platforms: new Set(),
+                userAgents: new Set(),
+                latestPath: '',
+                latestPlatform: ''
+            };
+        }
+        acc[ip].count += 1;
+        const vDate = v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000) : null;
+        if (!acc[ip].lastVisit || (vDate && vDate > acc[ip].lastVisit)) {
+            acc[ip].lastVisit = vDate;
+            acc[ip].latestPath = v.path || '/';
+            acc[ip].latestPlatform = v.platform || '-';
+        }
+        acc[ip].paths.add(v.path || '/');
+        acc[ip].platforms.add(v.platform || '-');
+        acc[ip].userAgents.add(v.userAgent);
+        return acc;
+    }, {});
+
+    const sortedGroups = Object.values(grouped).sort((a, b) => (b.lastVisit || 0) - (a.lastVisit || 0));
+
+    return (
+        <div className="p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
+                    Ziyaretçi Analizi
+                </h2>
+                <div className="flex bg-slate-100 p-1 rounded-xl self-start">
+                    <button
+                        onClick={() => setViewMode('grouped')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grouped' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        IP Gruplu
+                    </button>
+                    <button
+                        onClick={() => setViewMode('raw')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'raw' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Tüm Loglar
+                    </button>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto">
+                {viewMode === 'grouped' ? (
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-slate-100 italic">
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">IP Adresi</th>
+                                <th className="text-center py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Hit</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Son Aktivite</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Son Görülen Sayfa</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Cihazlar</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {sortedGroups.map(g => (
+                                <tr key={g.ip} className="hover:bg-slate-50 transition-colors">
+                                    <td className="py-4 px-4">
+                                        <div className="text-xs font-black text-indigo-600 font-mono">{g.ip}</div>
+                                        <div className="text-[9px] text-slate-400 mt-0.5 truncate max-w-[150px]">{Array.from(g.userAgents)[0]?.substring(0, 50)}...</div>
+                                    </td>
+                                    <td className="py-4 px-4 text-center">
+                                        <span className="bg-slate-900 text-white text-[10px] font-black px-2.5 py-1 rounded-full">{g.count}</span>
+                                    </td>
+                                    <td className="py-4 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">
+                                        {g.lastVisit ? g.lastVisit.toLocaleString('tr-TR') : '-'}
+                                    </td>
+                                    <td className="py-4 px-4">
+                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                                            {g.latestPath}
+                                        </span>
+                                    </td>
+                                    <td className="py-4 px-4">
+                                        <div className="flex flex-wrap gap-1">
+                                            {Array.from(g.platforms).map((p, i) => (
+                                                <span key={i} className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                    {p}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-slate-100 italic">
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tarih / Saat</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">IP Adresi</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Sayfa</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Cihaz / Platform</th>
+                                <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tarayıcı Bilgisi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {visitors.map(v => (
+                                <tr key={v.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="py-4 px-4 text-xs font-bold text-slate-700 whitespace-nowrap">
+                                        {v.timestamp?.seconds ? new Date(v.timestamp.seconds * 1000).toLocaleString('tr-TR') : '-'}
+                                    </td>
+                                    <td className="py-4 px-4 text-xs font-black text-indigo-600 font-mono">
+                                        {v.ip || 'Bilinmiyor'}
+                                    </td>
+                                    <td className="py-4 px-4">
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-bold">
+                                            {v.path || '/'}
+                                        </span>
+                                    </td>
+                                    <td className="py-4 px-4 text-xs font-medium text-slate-600">
+                                        {v.platform || '-'} / {v.language || '-'}
+                                    </td>
+                                    <td className="py-4 px-4 text-[10px] font-medium text-slate-400 max-w-xs truncate" title={v.userAgent}>
+                                        {v.userAgent}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </div>
+    );
+}
+
+
 function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
     const [isVisible, setIsVisible] = useState(false);
     const [phone, setPhone] = useState(u.phone || '');
     const [password, setPassword] = useState(u.password || '');
+    const [badgesInput, setBadgesInput] = useState((u.badges || []).join(', '));
     const [loading, setLoading] = useState(false);
 
     async function handleUpdate() {
         setLoading(true);
         try {
-            await adminUpdateUser(u.id, { phone, password });
+            const badgesArr = badgesInput.split(',').map(s => s.trim()).filter(Boolean);
+            await adminUpdateUser(u.id, { phone, password, badges: badgesArr });
             alert('Güncellendi');
         } catch (e) {
             alert('Hata!');
@@ -330,6 +478,14 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
             </td>
             <td className="py-4 px-4">
                 <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold" />
+            </td>
+            <td className="py-4 px-4">
+                <input
+                    value={badgesInput}
+                    onChange={e => setBadgesInput(e.target.value)}
+                    placeholder="premium, pati_dostu..."
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold"
+                />
             </td>
             <td className="py-4 px-4">
                 <div className="flex items-center gap-1">
@@ -416,7 +572,8 @@ function UsersTab({ users, onDelete, onToggleFeatured, onRefresh }) {
                         <tr className="border-b border-slate-100 font-black italic">
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Kullanıcı / ID</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Telefon No</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Şifre</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Rozetler (Virgülle)</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Şifre / Güncelle</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Kayıt</th>
                             <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aksiyon</th>
                         </tr>
