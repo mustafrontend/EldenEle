@@ -1,4 +1,4 @@
-const SITE_URL = 'https://eldenele.app';
+import { SITE_URL } from '../lib/seo';
 
 export default function robots() {
     return {
@@ -6,13 +6,18 @@ export default function robots() {
             {
                 userAgent: '*',
                 allow: '/',
-                disallow: ['/profil', '/ilan-olustur'],
+                disallow: ['/profil', '/ilan-olustur', '/api'],
             },
             {
                 userAgent: 'Googlebot',
                 allow: '/',
-                disallow: ['/profil', '/ilan-olustur'],
+                disallow: ['/profil', '/ilan-olustur', '/api'],
             },
+            {
+                userAgent: 'Bingbot',
+                allow: '/',
+                disallow: ['/profil', '/ilan-olustur', '/api'],
+            }
         ],
         sitemap: `${SITE_URL}/sitemap.xml`,
         host: SITE_URL,

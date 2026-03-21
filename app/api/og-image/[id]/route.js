@@ -3,7 +3,7 @@ export async function GET(request, { params }) {
     if (!id) return new Response('Not Found', { status: 404 });
 
     try {
-        const { getListingServer } = await import('../../../lib/firebaseServer');
+        const { getListingServer } = await import('@/lib/firebaseServer');
         const listing = await getListingServer(id);
 
         if (!listing || !listing.photos || listing.photos.length === 0) {

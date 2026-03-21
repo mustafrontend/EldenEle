@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { subscribePosts, togglePostLike } from '../lib/communityService';
@@ -8,6 +8,7 @@ import CreatePost from './CreatePost';
 import InlineComments from './InlineComments';
 import { useAuth } from '../lib/AuthContext';
 import UserBadge from './UserBadge';
+import { toast } from 'react-hot-toast';
 
 function formatTimeAgo(ts) {
     if (!ts?.seconds) return '';
@@ -51,8 +52,13 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
         }
     }
 
-    const trendingPosts = [...posts].sort((a, b) => ((b.commentCount || 0) + (b.likeCount || 0)) - ((a.commentCount || 0) + (a.likeCount || 0))).slice(0, 3);
-    const unansweredPosts = posts.filter(p => !p.commentCount && p.type === 'soru').slice(0, 3);
+    const trendingPosts = useMemo(() => {
+        return [...posts].sort((a, b) => ((b.commentCount || 0) + (b.likeCount || 0)) - ((a.commentCount || 0) + (a.likeCount || 0))).slice(0, 3);
+    }, [posts]);
+
+    const unansweredPosts = useMemo(() => {
+        return posts.filter(p => !p.commentCount && p.type === 'soru').slice(0, 3);
+    }, [posts]);
 
     const renderTrending = () => (
         <div className="bg-gradient-to-br from-white to-orange-50/30 rounded-2xl border border-orange-100 shadow-sm p-3 sm:p-4 relative overflow-hidden flex flex-col h-full">
@@ -129,7 +135,14 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
                             <h4 className="font-bold text-slate-800 text-[12px] leading-snug line-clamp-1 mb-0.5 group-hover:text-indigo-600 transition-colors">
                                 {listing.title}
                             </h4>
-                            <span className="text-[10px] text-slate-500 font-medium truncate">{listing.category}</span>
+                            <div className="flex items-center gap-1.5 overflow-hidden">
+                                <span className="text-[10px] text-slate-500 font-medium truncate">{listing.category}</span>
+                                {listing.userBadges && listing.userBadges.length > 0 && (
+                                    <div className="scale-75 origin-left h-4 flex items-center">
+                                        <UserBadge badges={[listing.userBadges[0]]} />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </Link>
                 ))}
@@ -215,8 +228,8 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
                                             </p>
 
                                             {post.imageUrl && (
-                                                <div className="mb-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-80 relative">
-                                                    <img src={post.imageUrl} alt="Gönderi" className="w-full h-full object-cover" />
+                                                <div className="mb-3 rounded-xl overflow-hidden border border-slate-200 shadow-sm relative bg-slate-50/50">
+                                                    <img src={post.imageUrl} alt="Gönderi" className="w-full h-auto max-h-[500px] object-contain mx-auto block" />
                                                 </div>
                                             )}
 
@@ -252,7 +265,7 @@ export default function CommunityFeed({ recentListings = [], onNavigateToListing
                                                         navigator.share({ title: 'Topluluk Gönderisi', url });
                                                     } else {
                                                         navigator.clipboard.writeText(url);
-                                                        alert("Gönderi bağlantısı kopyalandı!");
+                                                        toast.success("Gönderi bağlantısı kopyalandı!");
                                                     }
                                                 }} className="flex items-center gap-1.5 hover:text-blue-500 transition-colors group/btn ml-auto">
                                                     <div className="p-1.5 rounded-full group-hover/btn:bg-blue-50 transition-colors">

@@ -24,7 +24,7 @@ export async function generateMetadata({ params }) {
             locale: 'tr_TR',
             title: `${post.userName} Sordu: ${titleText}`,
             description: post.content,
-            siteName: 'EldenEle.app Topluluk',
+            siteName: 'EldenEle.pet Topluluk',
         }
     };
 }

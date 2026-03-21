@@ -3,15 +3,26 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { submitFeedback } from '../lib/feedbackService';
+import { toast } from 'react-hot-toast';
 
 export default function FeedbackButton() {
     const { user, userData } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
-    const [type, setType] = useState('suggestion'); // suggestion, bug, comment
+    const [type, setType] = useState('suggestion'); // suggestion, bug, comment, token
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [isPeeking, setIsPeeking] = useState(false);
+
+    // Dışarıdan tetiklenebilmesi için (Örn: Rozet İste butonu)
+    useEffect(() => {
+        const handleOpen = (e) => {
+            if (e.detail?.type) setType(e.detail.type);
+            setIsOpen(true);
+        };
+        window.addEventListener('openFeedback', handleOpen);
+        return () => window.removeEventListener('openFeedback', handleOpen);
+    }, []);
 
     // Her 25 saniyede bir, "Bana tıkla" dercesine 4 saniyeliğine butonu genişlet
     useEffect(() => {
@@ -46,7 +57,7 @@ export default function FeedbackButton() {
             }, 2500);
         } catch (error) {
             console.error("Geri bildirim gönderilemedi:", error);
-            alert("Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
+            toast.error("Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
         } finally {
             setIsSubmitting(false);
         }
@@ -81,7 +92,8 @@ export default function FeedbackButton() {
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md relative z-10 overflow-hidden fade-in-up border border-slate-100">
                         <div className="bg-slate-50 border-b border-slate-100 p-5 flex items-center justify-between">
                             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                                <span className="text-2xl">💡</span> Fikirlerinle Büyüyoruz
+                                <span className="text-2xl">{type === 'token' ? '💎' : '💡'}</span>
+                                {type === 'token' ? 'Jeton Talebi' : 'Fikirlerinle Büyüyoruz'}
                             </h2>
                             <button
                                 onClick={() => setIsOpen(false)}
@@ -103,35 +115,42 @@ export default function FeedbackButton() {
                                         </svg>
                                     </div>
                                     <h3 className="font-bold text-slate-800 text-xl mb-1">Çok Teşekkürler!</h3>
-                                    <p className="text-slate-500 text-sm">Görüşünüz ekibimize iletildi.</p>
+                                    <p className="text-slate-500 text-sm">{type === 'token' ? 'Talebiniz alınmıştır.' : 'Görüşünüz ekibimize iletildi.'}</p>
                                 </div>
                             ) : (
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Geri Bildirim Türü</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['suggestion', 'bug', 'comment'].map((t) => (
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Talep Türü</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {[
+                                                { id: 'suggestion', label: '💡 Öneri' },
+                                                { id: 'bug', label: '🐛 Hata' },
+                                                { id: 'token', label: '💎 Jeton' },
+                                                { id: 'comment', label: '💬 Diğer' }
+                                            ].map((t) => (
                                                 <button
-                                                    key={t}
+                                                    key={t.id}
                                                     type="button"
-                                                    onClick={() => setType(t)}
-                                                    className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl border transition-all ${type === t
+                                                    onClick={() => setType(t.id)}
+                                                    className={`py-2 px-1 text-[10px] sm:text-[11px] font-bold rounded-xl border transition-all ${type === t.id
                                                         ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
                                                         : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                                                         }`}
                                                 >
-                                                    {t === 'suggestion' ? '💡 Öneri' : t === 'bug' ? '🐛 Hata' : '💬 Diğer'}
+                                                    {t.label}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Mesajınız</label>
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
+                                            {type === 'token' ? 'Neden daha fazla jeton istiyorsunuz?' : 'Mesajınız'}
+                                        </label>
                                         <textarea
                                             value={message}
                                             onChange={(e) => setMessage(e.target.value)}
-                                            placeholder="Sanki bir arkadaşına anlatıyormuş gibi rahatça yaz..."
+                                            placeholder={type === 'token' ? 'İlanımı öne çıkarmak için jetona ihtiyacım var...' : "Sanki bir arkadaşına anlatıyormuş gibi rahatça yaz..."}
                                             rows="4"
                                             className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none transition-all"
                                             required
@@ -148,7 +167,7 @@ export default function FeedbackButton() {
                                                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                                             ) : (
                                                 <>
-                                                    Gönder
+                                                    {type === 'token' ? 'Talep Et' : 'Gönder'}
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                                     </svg>

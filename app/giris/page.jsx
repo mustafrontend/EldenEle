@@ -3,26 +3,56 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../lib/AuthContext';
+import { useAuth, normalizePhone } from '../../lib/AuthContext';
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login } = useAuth();
+    const { login, findUserEmailByPhone } = useAuth();
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
 
+    const formatPhoneNumber = (value) => {
+        if (!value) return value;
+        const phoneNumber = value.replace(/[^\d]/g, '');
+        const phoneNumberLength = phoneNumber.length;
+        if (phoneNumberLength < 4) return phoneNumber;
+        if (phoneNumberLength < 7) {
+            return `${phoneNumber.slice(0, 4)} ${phoneNumber.slice(4)}`;
+        }
+        if (phoneNumberLength < 9) {
+            return `${phoneNumber.slice(0, 4)} ${phoneNumber.slice(4, 7)} ${phoneNumber.slice(7)}`;
+        }
+        return `${phoneNumber.slice(0, 4)} ${phoneNumber.slice(4, 7)} ${phoneNumber.slice(7, 9)} ${phoneNumber.slice(9, 11)}`;
+    };
+
+    const handlePhoneChange = (e) => {
+        const formattedValue = formatPhoneNumber(e.target.value);
+        setPhone(formattedValue);
+    };
+
     async function submit(e) {
         e?.preventDefault();
         setError('');
         if (!phone || !password) { setError('Telefon ve şifre zorunludur.'); return; }
+
+        const cleanPhone = normalizePhone(phone);
+        if (cleanPhone.length < 10) { setError('Geçerli bir telefon numarası girin.'); return; }
+
         setLoading(true);
         try {
-            const cleanPhone = phone.replace(/\D/g, '');
-            const fakeEmail = `${cleanPhone}@eldenele.app`;
-            await login(fakeEmail, password, rememberMe);
+            // Smart lookup for email based on phone number
+            const actualEmail = await findUserEmailByPhone(phone);
+
+            if (!actualEmail) {
+                // If not found, try the default fallback (for completely missing users)
+                const fallbackEmail = `${cleanPhone}@eldenele.app`;
+                await login(fallbackEmail, password, rememberMe);
+            } else {
+                await login(actualEmail, password, rememberMe);
+            }
             router.push('/');
         } catch (err) {
             setError('Telefon numarası veya şifre hatalı.');
@@ -56,10 +86,11 @@ export default function LoginPage() {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Telefon Numarası</label>
                             <input
                                 value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
+                                onChange={handlePhoneChange}
                                 type="tel"
                                 placeholder="05XX XXX XX XX"
-                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-shadow"
+                                maxLength={15}
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 transition-shadow transition-all font-bold"
                             />
                         </div>
                         <div>

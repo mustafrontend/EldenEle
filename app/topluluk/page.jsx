@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation';
 
 export const metadata = {
-    title: 'Topluluk ve Talepler - EldenEle.app',
-    description: 'EldenEle.app yardımlaşma ağında aklına takılanı topluluğa sor, hizmet ve yetenek taleplerini hızlıca oluştur veya diğerlerine yardım et.',
+    title: 'Topluluk ve Talepler - EldenEle.pet',
+    description: 'EldenEle.pet yardımlaşma ağında aklına takılanı topluluğa sor, hizmet ve yetenek taleplerini hızlıca oluştur veya diğerlerine yardım et.',
     openGraph: {
-        title: 'Topluluk ve Talepler - EldenEle.app',
-        description: 'EldenEle.app yardımlaşma ağında aklına takılanı topluluğa sor, hizmet ve yetenek taleplerini hızlıca oluştur.',
-        url: 'https://eldenele.app/topluluk',
-        siteName: 'EldenEle.app',
+        title: 'Topluluk ve Talepler - EldenEle.pet',
+        description: 'EldenEle.pet yardımlaşma ağında aklına takılanı topluluğa sor, hizmet ve yetenek taleplerini hızlıca oluştur.',
+        url: 'https://eldenele.pet/topluluk',
+        siteName: 'EldenEle.pet',
         locale: 'tr_TR',
         type: 'website',
     },

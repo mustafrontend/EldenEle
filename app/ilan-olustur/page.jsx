@@ -8,20 +8,21 @@ import { iller, getIlceler } from '../../data/turkiye';
 import AppHeader from '../../components/AppHeader';
 
 import { petCategories } from '../../data/petCategories';
+import { toast } from 'react-hot-toast';
 
 const takasCategories = ['Mama', 'Aksesuar', 'Kafes / Yuva', 'Oyuncak', 'İlaç / Bakım', 'Akvaryum Malzemeleri', 'Diğer'];
 const bedelsizCategories = ['Ücretsiz Mama', 'Eşya Hibesi', 'Acil Destek / İlaç', 'Hediye Paketleri', 'Diğer'];
 const otelCategories = ['Pet Oteli / Pansiyon', 'Evde Bakıcı', 'Geçici Yuva / Host', 'Gündüz Bakımevi', 'Eğitim / Okul', 'Diğer'];
 const gezdirmeCategories = ['Köpek Gezdirme', 'Düzenli Gezdirme', 'Haftalık Yürüyüş', 'Diğer'];
 const transferCategories = ['Şehir İçi Transfer', 'Şehirler Arası Nakil', 'Havayolu Nakliyesi', 'VİP Pet Taksi', 'Diğer'];
-const kanBagisiCategories = ['Acil Kan Arayışı', 'Kan Donörü Olabilir', 'İlaç/Serum Desteği', 'Diğer'];
+const aksesuarMamaCategories = ['Mama', 'Aksesuar', 'Tasma / Gezdirme', 'Yatak / Yuva', 'Oyuncak', 'Bakım Ürünleri', 'Diğer'];
 
 function getCats(concept) {
     if (['sahiplendirme', 'sahiplenmek-istiyorum', 'ciftlestirme', 'kayip'].includes(concept)) return petCategories.map(c => c.name);
     if (concept === 'otel') return otelCategories;
     if (concept === 'gezdirme') return gezdirmeCategories;
     if (concept === 'transfer') return transferCategories;
-    if (concept === 'kan-bagisi') return kanBagisiCategories;
+    if (concept === 'aksesuar-mama') return aksesuarMamaCategories;
     if (concept === 'bedelsiz') return bedelsizCategories;
     return takasCategories;
 }
@@ -48,6 +49,80 @@ export default function CreateListingPage() {
     const [submitting, setSubmitting] = useState(false);
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState('');
+    const [userIsFeatured, setUserIsFeatured] = useState(false);
+    const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+    const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
+    const [aiFeedback, setAiFeedback] = useState(null); // { quality: {}, health: "", score: 0 }
+
+    async function handlePhotoAI(base64) {
+        setIsAnalyzingPhoto(true);
+        try {
+            const res = await fetch('/api/ai/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task: 'analyze-photo', data: { imageBase64: base64 } })
+            });
+            const data = await res.json();
+            let content = data.choices?.[0]?.message?.content || '{}';
+            // Clean markdown if AI included it
+            content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            const aiData = JSON.parse(content);
+
+            if (aiData.type) {
+                const matchedCat = petCategories.find(c => c.name.toLowerCase().includes(aiData.type.toLowerCase()));
+                if (matchedCat) setCategory(matchedCat.name);
+            }
+            if (aiData.breed) setBreed(aiData.breed);
+            if (aiData.breed && !title) setTitle(`${aiData.breed} dostumuz yuva arıyor`);
+
+            setAiFeedback({
+                quality: aiData.qualityControl || {},
+                health: aiData.healthStatus || "",
+                desc: aiData.description || ""
+            });
+
+            if (aiData.qualityControl?.score < 5) {
+                toast.error("PatiAI Notu: Fotoğraf kalitesi düşük olabilir. 📸");
+            } else {
+                toast.success("PatiAI fotoğrafı analiz etti ve alanları doldurdu! 🐾");
+            }
+        } catch (err) {
+            console.error("AI Analysis failed", err);
+        } finally {
+            setIsAnalyzingPhoto(false);
+        }
+    }
+
+    async function handleDescriptionAI() {
+        if (!description.trim() || description.length < 5) {
+            toast.error("Lütfen önce birkaç anahtar kelime yazın (ör: 2 aylık, uysal, aşıları tam)");
+            return;
+        }
+        setIsGeneratingDesc(true);
+        const tid = toast.loading("AI harika bir hikaye yazıyor...");
+        try {
+            const res = await fetch('/api/ai/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task: 'generate-description', data: { input: description } })
+            });
+            const data = await res.json();
+            const aiContent = data.choices?.[0]?.message?.content;
+            if (aiContent) {
+                setDescription(aiContent);
+                toast.success("İlan metni AI ile iyileştirildi! ✨", { id: tid });
+            }
+        } catch (err) {
+            toast.error("AI metin oluştururken bir hata oluştu.", { id: tid });
+        } finally {
+            setIsGeneratingDesc(false);
+        }
+    }
+
+    function handleRequestBadge() {
+        const event = new CustomEvent('openFeedback', { detail: { type: 'token' } });
+        window.dispatchEvent(event);
+    }
 
     // Quick Concept Selection
     useEffect(() => {
@@ -104,9 +179,16 @@ export default function CreateListingPage() {
         const remaining = 5 - photoFiles.length;
         const toAdd = newFiles.slice(0, remaining);
         setPhotoFiles(prev => [...prev, ...toAdd]);
-        toAdd.forEach(f => {
+        toAdd.forEach((f, idx) => {
             const reader = new FileReader();
-            reader.onload = e => setPhotoPreviews(prev => [...prev, e.target.result]);
+            reader.onload = e => {
+                const b64 = e.target.result;
+                setPhotoPreviews(prev => [...prev, b64]);
+                // AI Analysis for the first uploaded photo
+                if (photoPreviews.length === 0 && idx === 0) {
+                    handlePhotoAI(b64);
+                }
+            };
             reader.readAsDataURL(f);
         });
     }
@@ -143,7 +225,7 @@ export default function CreateListingPage() {
                 userPhone: userData?.phone || '',
                 userEmail: user.email,
                 hidePhone,
-                userIsFeatured: userData?.isFeatured || false,
+                userIsFeatured,
                 updatedAt: new Date()
             };
 
@@ -170,8 +252,7 @@ export default function CreateListingPage() {
         { key: 'gezdirme', label: 'Pati Gezdirme', desc: 'Köpek gezdirme hizmeti', color: 'amber', icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z' },
         { key: 'kayip', label: 'Kayıp / Bulunan', desc: 'Acil durum ilanı ver', color: 'red', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
         { key: 'transfer', label: 'Pati Nakil / Taksi', desc: 'Pet taşıma hizmeti', color: 'cyan', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
-        { key: 'kan-bagisi', label: 'Kan Bağışı', desc: 'Acil kan/ilaç desteği', color: 'red', icon: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' },
-        { key: 'takas', label: 'Pati Takas', desc: 'Mama ve aksesuar takasla', color: 'blue', icon: 'M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L13.5 12M21 7.5H7.5' },
+        { key: 'aksesuar-mama', label: 'Pati Market', desc: 'Aksesuar & Mama satışı', color: 'blue', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z' },
         { key: 'bedelsiz', label: 'Destek / Hediye', desc: 'Ücretsiz yardım sağla', color: 'emerald', icon: 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z' },
     ];
 
@@ -182,14 +263,14 @@ export default function CreateListingPage() {
     }, [category]);
 
     function getConceptBorderClass(key) {
-        const colorMap = { takas: 'blue', bedelsiz: 'emerald', sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'kan-bagisi': 'red' };
+        const colorMap = { takas: 'blue', bedelsiz: 'emerald', sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'aksesuar-mama': 'blue' };
         const c = colorMap[key] || 'slate';
         return concept === key ? `border-${c}-800 bg-${c}-50 text-${c}-900 shadow-sm ring-1 ring-${c}-500/20` : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50';
     }
 
     function getCatActiveClass(cat) {
         if (category !== cat) return 'bg-white border-gray-300 text-gray-600';
-        const colorMap = { sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', bedelsiz: 'emerald', takas: 'blue', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'kan-bagisi': 'red' };
+        const colorMap = { sahiplendirme: 'orange', 'sahiplenmek-istiyorum': 'rose', bedelsiz: 'emerald', takas: 'blue', ciftlestirme: 'purple', otel: 'indigo', gezdirme: 'amber', kayip: 'red', transfer: 'cyan', 'aksesuar-mama': 'blue' };
         const c = colorMap[concept];
         if (c) return `bg-${c}-600 border-${c}-600 text-white`;
         return 'bg-slate-800 border-slate-800 text-white';
@@ -253,7 +334,59 @@ export default function CreateListingPage() {
                         )}
                     </div>
                     <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={onFileChange} />
-                    <p className="text-xs text-gray-400">Sürükle & bırak veya tıklayarak yükle</p>
+                    <div className="flex items-center gap-2 mt-3">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <p className="text-[10px] font-black text-emerald-700 uppercase tracking-tighter">Pati-Göz AI Aktif: Fotoğraf yüklediğinizde cins ve tür otomatik belirlenir.</p>
+                    </div>
+
+                    {isAnalyzingPhoto && (
+                        <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 animate-pulse">
+                            <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
+                            <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Pati-Göz AI Fotoğrafı Analiz Ediyor...</span>
+                        </div>
+                    )}
+
+                    {aiFeedback && (
+                        <div className="mt-4 space-y-3 animate-in fade-in slide-in-from-top-2">
+                            <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-xl shadow-slate-200 relative overflow-hidden group">
+                                <div className="relative z-10">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg">🔬</span>
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">PatiAI Analiz Raporu</span>
+                                        </div>
+                                        <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black">SKOR: {aiFeedback.quality?.score || 0}/10</div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Quality */}
+                                        <div className="space-y-2">
+                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fotoğraf Kalitesi</div>
+                                            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                <div className="h-full bg-indigo-400 transition-all duration-1000" style={{ width: `${(aiFeedback.quality?.score || 0) * 10}%` }}></div>
+                                            </div>
+                                            <p className="text-[11px] font-medium text-slate-200 leading-relaxed italic">
+                                                "{aiFeedback.quality?.feedback || "Fotoğraf başarıyla analiz edildi."}"
+                                            </p>
+                                        </div>
+
+                                        {/* Health */}
+                                        <div className="space-y-2">
+                                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sağlık Gözlemi</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                                <span className="text-[11px] font-bold text-emerald-300">Ön Analiz Tamamlandı</span>
+                                            </div>
+                                            <p className="text-[11px] font-medium text-slate-200 leading-relaxed">
+                                                {aiFeedback.health || "Hayvanın genel durumu iyi gözüküyor."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="absolute -right-8 -bottom-8 text-8xl opacity-[0.05] rotate-12 group-hover:rotate-0 transition-transform duration-700 pointer-events-none">🐾</div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Form Fields */}
@@ -292,8 +425,8 @@ export default function CreateListingPage() {
                         </div>
                     </div>
 
-                    {/* Breed / Type selection for Sahiplendirme or Adoption Request or Mating or Lost */}
-                    {(['sahiplendirme', 'sahiplenmek-istiyorum', 'ciftlestirme', 'kayip'].includes(concept)) && category && currentBreeds.length > 0 && (
+                    {/* Breed / Type selection for Sahiplendirme or Adoption Request or Mating or Lost or Pati Market */}
+                    {(['sahiplendirme', 'sahiplenmek-istiyorum', 'ciftlestirme', 'kayip', 'aksesuar-mama'].includes(concept)) && category && currentBreeds.length > 0 && (
                         <div className="animate-modal">
                             <label className="block text-sm font-semibold text-gray-800 mb-2">Tür / Irk <span className="text-red-500">*</span></label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-50/50 rounded-lg">
@@ -310,11 +443,26 @@ export default function CreateListingPage() {
                         </div>
                     )}
 
-                    {/* Description */}
                     <div>
-                        <label className="block text-sm font-semibold text-gray-800 mb-2">Açıklama</label>
-                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="4" placeholder="Ürününüzü detaylı bir şekilde tanımlayın…"
-                            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 resize-none transition-shadow" />
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-semibold text-gray-800">Açıklama</label>
+                            <button
+                                type="button"
+                                onClick={handleDescriptionAI}
+                                disabled={isGeneratingDesc}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 disabled:opacity-50"
+                            >
+                                {isGeneratingDesc ? (
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <span className="text-xs">✨</span>
+                                )}
+                                AI İLE GELİŞTİR
+                            </button>
+                        </div>
+                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows="6" placeholder="Ör: 2 aylık, uysal, aşıları tam..."
+                            className="w-full border border-gray-300 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-slate-800 focus:ring-1 focus:ring-slate-800 resize-none transition-shadow" />
+                        <p className="text-[10px] text-slate-400 font-bold mt-2 italic">* Birkaç kelime yazıp AI butonuna basarak profesyonel bir ilan metni oluşturabilirsiniz.</p>
                     </div>
 
                     {/* City / District */}
@@ -337,26 +485,72 @@ export default function CreateListingPage() {
                         </div>
                     </div>
 
-                    {/* Phone Display Preference */}
-                    <div className="pt-4 border-t border-gray-100">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                            <div className="relative flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={hidePhone}
-                                    onChange={(e) => setHidePhone(e.target.checked)}
-                                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 transition-all checked:bg-slate-800 checked:border-slate-800"
-                                />
-                                <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
+                </div>
+
+                {/* Badge & Featured System */}
+                <div className="pt-4 border-t border-gray-100 space-y-4">
+                    <div className="flex items-center justify-between bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-indigo-100 text-lg">💎</div>
+                            <div>
+                                <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Bakiyeniz</div>
+                                <div className="text-lg font-black text-indigo-900 leading-none">{userData?.tokens || 0} Jeton</div>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">Numaramı Gizle, Sadece WhatsApp'tan Ulaş</span>
-                                <p className="text-[11px] text-slate-500">Telefon numaranız doğrudan görünmez, alıcılar size hazır WhatsApp mesajı ile ulaşır.</p>
-                            </div>
-                        </label>
+                        </div>
+                        {(userData?.tokens || 0) < 2 && (
+                            <button
+                                onClick={handleRequestBadge}
+                                className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-sm hover:bg-indigo-700 transition-all active:scale-95"
+                            >
+                                Rozet İste
+                            </button>
+                        )}
                     </div>
+
+                    <label className={`flex items-center gap-3 cursor-pointer group p-4 rounded-2xl border transition-all ${userIsFeatured ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}>
+                        <div className="relative flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={userIsFeatured}
+                                onChange={(e) => {
+                                    if (!userIsFeatured && (userData?.tokens || 0) <= 0) {
+                                        toast.error("Yeterli jetonunuz bulunmuyor.");
+                                        return;
+                                    }
+                                    setUserIsFeatured(e.target.checked);
+                                }}
+                                className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-amber-300 transition-all checked:bg-amber-500 checked:border-amber-500"
+                            />
+                            <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-800">İlanımı Öne Çıkar</span>
+                                <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter">-1 JETON</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500">İlanınız listenin en başında ve özel vurguyla gösterilir.</p>
+                        </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer group px-4">
+                        <div className="relative flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={hidePhone}
+                                onChange={(e) => setHidePhone(e.target.checked)}
+                                className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 transition-all checked:bg-slate-800 checked:border-slate-800"
+                            />
+                            <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">Numaramı Gizle, Sadece WhatsApp'tan Ulaş</span>
+                            <p className="text-[11px] text-slate-500">Telefon numaranız doğrudan görünmez, alıcılar size hazır WhatsApp mesajı ile ulaşır.</p>
+                        </div>
+                    </label>
                 </div>
 
                 {error && (
@@ -376,6 +570,6 @@ export default function CreateListingPage() {
                     {submitting ? 'İşleniyor...' : isEditing ? 'Değişiklikleri Kaydet' : 'İlanı Yayınla'}
                 </button>
             </div>
-        </div >
+        </div>
     );
 }

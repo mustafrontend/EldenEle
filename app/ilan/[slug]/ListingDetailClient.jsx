@@ -10,6 +10,8 @@ import AppHeader from '../../../components/AppHeader';
 import ListingCard from '../../../components/ListingCard';
 import MessageModal from '../../../components/MessageModal';
 import PetLoading from '../../../components/PetLoading';
+import UserBadge from '../../../components/UserBadge';
+import { toast } from 'react-hot-toast';
 
 function formatDate(ts) {
     if (!ts?.seconds) return '';
@@ -19,13 +21,20 @@ function formatDate(ts) {
 function getStyling(listing) {
     if (!listing) return {};
     const c = listing.concept;
-    if (c === 'sahiplendirme') return { label: 'Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
-    if (c === 'sahiplenmek-istiyorum') return { label: 'Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
-    if (c === 'ciftlestirme') return { label: 'Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
-    if (c === 'otel') return { label: 'Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: listing.estimatedValue ? `₺${listing.estimatedValue}` : 'FİYAT SORUN' };
-    if (c === 'bedelsiz') return { label: 'Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
-    if (c === 'takas') return { label: 'Pati Takas', badge: 'bg-blue-50 text-blue-600 border-blue-200', hover: 'hover:border-blue-200', textHover: 'group-hover:text-blue-500', val: 'TAKAS' };
-    return { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
+    let result = { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
+
+    if (c === 'sahiplendirme') result = { label: 'Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
+    else if (c === 'sahiplenmek-istiyorum') result = { label: 'Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
+    else if (c === 'ciftlestirme') result = { label: 'Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
+    else if (c === 'otel') result = { label: 'Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: listing.estimatedValue ? `₺${listing.estimatedValue}` : 'FİYAT SORUN' };
+    else if (c === 'bedelsiz') result = { label: 'Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
+    else if (c === 'takas') result = { label: 'Pati Takas', badge: 'bg-blue-50 text-blue-600 border-blue-200', hover: 'hover:border-blue-200', textHover: 'group-hover:text-blue-500', val: 'TAKAS' };
+
+    if (listing.userListingsCount > 2) {
+        result.val = 'GÖRÜŞÜLÜR';
+    }
+
+    return result;
 }
 
 export default function ListingDetailClient({ slug, serverListing }) {
@@ -41,7 +50,16 @@ export default function ListingDetailClient({ slug, serverListing }) {
     const isFavorite = useMemo(() => userData?.favorites?.includes(listing?.id), [userData, listing]);
     const favorites = useMemo(() => userData?.favorites || [], [userData]);
     const isOwner = useMemo(() => user?.uid === listing?.userId, [user, listing]);
-    const styling = useMemo(() => getStyling(listing), [listing]);
+
+    const styling = useMemo(() => {
+        if (!listing) return {};
+        let count = listing.userListingsCount || 0;
+        // Eğer tekil ilanda sayı yoksa subscribelistings'den gelen tüm ilanlardan hesapla
+        if (!count && listing.userId && allListings.length > 0) {
+            count = allListings.filter(l => l.userId === listing.userId).length;
+        }
+        return getStyling({ ...listing, userListingsCount: count });
+    }, [listing, allListings]);
 
     const relatedListings = useMemo(() => {
         if (!listing) return [];
@@ -149,7 +167,7 @@ export default function ListingDetailClient({ slug, serverListing }) {
                             <div>
                                 <div className="aspect-square bg-slate-50 rounded-[2rem] overflow-hidden shadow-[0_2px_20px_rgb(0,0,0,0.03)] border border-slate-100 mb-4 group relative">
                                     {listing.photos && listing.photos.length ? (
-                                        <img src={listing.photos[currentPhoto]} alt={`${listing.title} - ${listing.category} - EldenEle.app`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" itemProp="image" />
+                                        <img src={listing.photos[currentPhoto]} alt={`${listing.title} - ${listing.category} - EldenEle.pet`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" itemProp="image" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
                                             <svg className="w-16 h-16 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,11 +235,14 @@ export default function ListingDetailClient({ slug, serverListing }) {
                                         <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm border border-slate-100 shrink-0">
                                             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                         </div>
-                                        <span itemProp="seller" className="font-bold text-slate-700">{listing.userName || 'Kullanıcı'}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span itemProp="seller" className="font-bold text-slate-700">{listing.userName || 'Kullanıcı'}</span>
+                                            {listing.userBadges && listing.userBadges.length > 0 && <UserBadge badges={listing.userBadges} />}
+                                        </div>
                                         {!listing.hidePhone && listing.userPhone && (
                                             <>
-                                                <span className="text-slate-300">•</span>
-                                                <span className="text-slate-900 font-black tracking-tight">{formatPhoneForDisplay(listing.userPhone)}</span>
+                                                <span className="text-slate-300 ml-1">•</span>
+                                                <span className="text-slate-900 font-black tracking-tight ml-1">{formatPhoneForDisplay(listing.userPhone)}</span>
                                             </>
                                         )}
                                     </div>
@@ -260,7 +281,7 @@ export default function ListingDetailClient({ slug, serverListing }) {
 
                                         {listing.userPhone && (
                                             <a
-                                                href={`https://api.whatsapp.com/send?phone=${(listing.userPhone || '').toString().split('').filter(c => /\d/.test(c)).join('').replace(/^00/, '').replace(/^0/, '').replace(/^90/, '90').replace(/^(5)/, '90$1')}&text=${encodeURIComponent(`Selamlar, EldenEle.Pati üzerinden "${listing.title}" ilanınız için ulaşıyorum. Can dostumuz ile ilgileniyorum.`)}`}
+                                                href={`https://api.whatsapp.com/send?phone=${(listing.userPhone || '').toString().split('').filter(c => /\d/.test(c)).join('').replace(/^00/, '').replace(/^0/, '').replace(/^90/, '90').replace(/^(5)/, '90$1')}&text=${encodeURIComponent(`Selamlar, EldenEle.Pati üzerinden "${listing.title}" ilanınız için ulaşıyorum. Can dostumuz ile ilgileniyorum.\n\nİlan Linki: ${typeof window !== 'undefined' ? window.location.href : ''}`)}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 onClick={handleWhatsAppClick}
@@ -306,6 +327,64 @@ export default function ListingDetailClient({ slug, serverListing }) {
                             </div>
                         </div>
                     </article>
+
+                    {/* Safety and Legal Notice Section */}
+                    <section className="mb-16">
+                        <div className="bg-white border-[0.5px] border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
+                            <div className="p-6 sm:p-8 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
+                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-slate-900 tracking-tight leading-none mb-1">Emniyet ve Sahiplendirme Rehberi</h2>
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Lütfen can dostlarımızın güvenliği için bu kuralları okuyunuz</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+                                {/* Tip 1 */}
+                                <div className="p-6 hover:bg-slate-50 transition-colors duration-300">
+                                    <h3 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                        Tanımadığınız Kişilere Dikkat!
+                                    </h3>
+                                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed">
+                                        Canlıyı yüz yüze görmeden, sağlık testlerini kontrol etmeden hiçbir şekilde <span className="text-slate-900 font-bold">kaparo veya benzeri bir ödeme</span> yapmayınız. Güvenliğiniz için mutlaka yüz yüze görüşmeyi tercih ediniz.
+                                    </p>
+                                </div>
+
+                                {/* Tip 2 */}
+                                <div className="p-6 hover:bg-slate-50 transition-colors duration-300">
+                                    <h3 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                        İlan ve Bilgi Sorumluluğu
+                                    </h3>
+                                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed">
+                                        Sitemiz bir ilan platformudur ve aracılık/komisyonculuk yapmamaktadır. İlanlardaki bilgilerin, görsellerin ve açıklamaların doğruluğuna yönelik tüm sorumluluk <span className="text-slate-900 font-bold">ilan sahibine aittir.</span>
+                                    </p>
+                                </div>
+
+                                {/* Tip 3 */}
+                                <div className="p-6 hover:bg-slate-50 transition-colors duration-300">
+                                    <h3 className="text-sm font-black text-slate-800 mb-2 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        Yasal Bilgilendirme & Sağlık
+                                    </h3>
+                                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed">
+                                        <span className="text-slate-900 font-bold">5199 ve 5651 sayılı kanunlar</span> çerçevesinde hizmet veriyoruz. 2 aydan küçük ve aşısı yapılmamış yavruların satışı yasaktır. Tüm sahipli hayvanlar için <span className="text-slate-900 font-bold">çip takılması zorunludur.</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+                                <p className="text-[11px] text-slate-400 font-bold text-center leading-relaxed">
+                                    Bu platform mutlu patiler petshop'un ve diğer seçkin petshop/çiftliklerin online kataloğudur. Hukuka aykırı olduğunu düşündüğünüz içerikleri <Link href="/iletisim" className="text-indigo-600 hover:underline">iletişim sayfamızdan</Link> bildirebilirsiniz.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
 
                     {relatedListings.length > 0 && (
                         <section className="pt-8 sm:pt-12 border-t border-slate-100">

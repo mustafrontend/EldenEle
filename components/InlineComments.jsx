@@ -37,7 +37,8 @@ export default function InlineComments({ postId }) {
             await createComment({
                 postId,
                 content: newComment.trim(),
-                isAdminReply: isAdminReply
+                isAdminReply: isAdminReply,
+                userBadges: userData?.badges || []
             });
             setNewComment('');
             // We keep isAdminReply as is if the user wants to continue replying as admin

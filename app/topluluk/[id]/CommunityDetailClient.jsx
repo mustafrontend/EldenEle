@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useAuth } from '../../../lib/AuthContext';
 import { subscribeComments, createComment, getPost, incrementPostView } from '../../../lib/communityService';
 import AppHeader from '../../../components/AppHeader';
+import UserBadge from '../../../components/UserBadge';
+import PetLoading from '../../../components/PetLoading';
 
 function formatDateTime(ts) {
     if (!ts?.seconds) return '';
@@ -14,7 +16,7 @@ function formatDateTime(ts) {
 }
 
 export default function CommunityDetailClient({ postId, serverPost }) {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [post, setPost] = useState(serverPost);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
@@ -42,7 +44,11 @@ export default function CommunityDetailClient({ postId, serverPost }) {
         if (!newComment.trim() || !user) return;
         setLoading(true);
         try {
-            await createComment({ postId, content: newComment.trim() });
+            await createComment({
+                postId,
+                content: newComment.trim(),
+                userBadges: userData?.badges || []
+            });
             setNewComment('');
             // Optimistically update post comment count
             if (post) {
@@ -68,8 +74,8 @@ export default function CommunityDetailClient({ postId, serverPost }) {
                 </Link>
 
                 {!post ? (
-                    <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center animate-pulse">
-                        <p className="text-gray-400 font-medium">Yükleniyor...</p>
+                    <div className="py-20 flex items-center justify-center">
+                        <PetLoading message="Topluluk gönderisi getiriliyor..." />
                     </div>
                 ) : (
                     <>
@@ -92,7 +98,10 @@ export default function CommunityDetailClient({ postId, serverPost }) {
                                     )}
                                 </div>
                                 <div>
-                                    <h1 className="font-bold text-slate-900">{post.userName}</h1>
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="font-bold text-slate-900">{post.userName}</h1>
+                                        {post.userBadges && <UserBadge badges={post.userBadges} />}
+                                    </div>
                                     <p className="text-sm text-gray-500">{formatDateTime(post.createdAt)}</p>
                                 </div>
                             </div>
@@ -100,6 +109,12 @@ export default function CommunityDetailClient({ postId, serverPost }) {
                             <p className="text-lg text-slate-800 leading-relaxed whitespace-pre-wrap font-medium pb-4 border-b border-gray-100">
                                 {post.content}
                             </p>
+
+                            {post.imageUrl && (
+                                <div className="mb-4 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50/30 text-center">
+                                    <img src={post.imageUrl} alt="Gönderi" className="w-full h-auto max-h-[600px] object-contain mx-auto block" />
+                                </div>
+                            )}
 
                             <div className="flex items-center gap-6 mt-4 text-gray-400">
                                 <div className="flex items-center gap-2">
@@ -192,6 +207,7 @@ export default function CommunityDetailClient({ postId, serverPost }) {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <span className="font-bold text-slate-900 text-sm">{c.userName}</span>
+                                                {c.userBadges && <UserBadge badges={c.userBadges} />}
                                                 <span className="text-xs text-gray-400">{formatDateTime(c.createdAt)}</span>
                                             </div>
                                             <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{c.content}</p>

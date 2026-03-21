@@ -149,3 +149,188 @@ body {
     transform: translateY(0) scale(1);
   }
 }
+
+/* PetLoading Animations */
+@keyframes loading-bar {
+  0% {
+    transform: scaleX(0);
+  }
+
+  50% {
+    transform: scaleX(0.7);
+  }
+
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.animate-loading-bar {
+  animation: loading-bar 2s infinite ease-in-out;
+}
+
+/* MapView Custom Styles (Leaflet) */
+.custom-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.custom-popup .leaflet-popup-content {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.pin-container {
+  width: 38px;
+  height: 38px;
+  border-radius: 50% 50% 50% 0;
+  background: #fff;
+  position: absolute;
+  transform: rotate(-45deg);
+  left: 50%;
+  top: 50%;
+  margin: -23px 0 0 -19px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 2.5px solid #fff;
+  overflow: hidden;
+  z-index: 2;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.custom-map-marker:hover .pin-container {
+  transform: rotate(-45deg) scale(1.15);
+  border-color: #4f46e5;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+}
+
+.featured-pin .pin-container {
+  border-color: #f97316;
+  box-shadow: 0 6px 12px rgba(249, 115, 22, 0.3);
+}
+
+.pin-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: rotate(45deg) scale(1.4);
+}
+
+.pin-icon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(45deg);
+  font-size: 18px;
+  background: #f8fafc;
+}
+
+.pin-shadow {
+  width: 14px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  margin-left: -7px;
+  filter: blur(2px);
+}
+
+@keyframes story-progress {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-story-progress {
+  animation: story-progress 5s linear forwards;
+}
+
+/* Paw Float Animation */
+@keyframes paw-float {
+  0% {
+    transform: translateY(110vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.2;
+  }
+
+  50% {
+    transform: translateY(50vh) translateX(30px) rotate(20deg);
+  }
+
+  85% {
+    opacity: 0.2;
+  }
+
+  100% {
+    transform: translateY(-20vh) translateX(-30px) rotate(-20deg);
+    opacity: 0;
+  }
+}
+
+.paw-floating {
+  position: absolute;
+  bottom: -10vh;
+  pointer-events: none;
+  animation: paw-float linear infinite;
+  user-select: none;
+  will-change: transform, opacity;
+}
+
+/* News Content HTML Styling */
+.news-content {
+  text-align: left;
+}
+
+.news-content b,
+.news-content strong {
+  font-weight: 800;
+  color: #1e293b;
+  /* slate-800 */
+}
+
+.news-content h3 {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+  /* slate-900 */
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.2;
+}
+
+.news-content ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin-bottom: 1rem;
+}
+
+.news-content li {
+  margin-bottom: 0.5rem;
+  position: relative;
+  padding-left: 1.25rem;
+}
+
+.news-content li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #f97316;
+  /* orange-500 */
+  font-weight: bold;
+}
+
+.news-content p {
+  margin-bottom: 1rem;
+}

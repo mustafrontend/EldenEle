@@ -7,13 +7,31 @@ import { useAuth } from '../lib/AuthContext';
 import { subscribeMessages } from '../lib/listingService';
 import { requestPushPermission } from '../lib/notificationService';
 import NotificationsDropdown from './NotificationsDropdown';
+import UserBadge from './UserBadge';
+import { createStory } from '../lib/storyService';
+import { toast } from 'react-hot-toast';
+import { useRef } from 'react';
 
 export default function AppHeader({ onSearch }) {
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, userData, logout } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
+    const [scrolled, setScrolled] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
+    const [friendRequestCount, setFriendRequestCount] = useState(0);
     const [activeUsers, setActiveUsers] = useState(142);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const searchTimeout = useRef(null);
+
+    const doSearch = (val) => {
+        setSearchQuery(val);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => {
+            if (onSearch) onSearch(val);
+        }, 300);
+    };
 
     useEffect(() => {
         // Pseudo-random active users fluctuation
@@ -23,27 +41,79 @@ export default function AppHeader({ onSearch }) {
         return () => clearInterval(interval);
     }, []);
 
+    // Reminder Agent Trigger (Client-side periodic ping)
     useEffect(() => {
         if (!user) return;
 
-        // Push Notification izni iste ve token'ı kaydet
-        requestPushPermission(user.uid);
+        const triggerAgent = async () => {
+            try {
+                // Sadece tetikler, dönen veriyi burada kullanmaya gerek yok
+                // API arka planda mesajları kontrol edip bildirimleri oluşturur
+                await fetch('/api/agent/reminders');
+            } catch (err) {
+                console.error("Agent ping failed:", err);
+            }
+        };
 
-        const unsub = subscribeMessages(user.uid, (msgs) => {
+        // İlk girişte ve sonra her 5 dakikada bir (300.000 ms)
+        triggerAgent();
+        const agentInterval = setInterval(triggerAgent, 5 * 60 * 1000);
+
+        return () => clearInterval(agentInterval);
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        const unsubPush = requestPushPermission(user.uid);
+
+        const unsubMsgs = subscribeMessages(user.uid, (msgs) => {
             const count = msgs.filter(m => m.receiverId === user.uid && !m.read).length;
             setUnreadMessages(count);
         });
-        return () => unsub();
+
+        // Real-time Friend Requests check
+        let unsubReqs = () => { };
+        import('../lib/listingService').then(({ subscribeFriendRequests }) => {
+            unsubReqs = subscribeFriendRequests(user.uid, (reqs) => {
+                setFriendRequestCount(reqs.length);
+            });
+        });
+
+        return () => {
+            unsubMsgs();
+            unsubReqs();
+            if (unsubPush && typeof unsubPush === 'function') unsubPush();
+        };
     }, [user]);
 
-    function doSearch(val) {
-        setSearchQuery(val);
-        if (onSearch) onSearch(val);
-    }
 
     function goCreate() {
         if (!user) router.push('/giris');
         else router.push('/ilan-olustur');
+    }
+
+    async function handleStoryUpload(e) {
+        const file = e.target.files[0];
+        if (!file || !user) return;
+
+        try {
+            setIsUploading(true);
+            const tid = toast.loading('Hikaye yükleniyor...');
+            // storyData object will take from firestore userData
+            const storyData = {
+                userName: userData?.displayName || user?.displayName || 'Anonim',
+                userPhoto: userData?.photoURL || user?.photoURL || null,
+                userBadges: userData?.badges || []
+            };
+            await createStory(file, storyData);
+            toast.success('Hikayen paylaşıldı! 🐾', { id: tid });
+        } catch (err) {
+            toast.error('Yükleme başarısız: ' + err.message);
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
     }
 
     return (
@@ -127,15 +197,30 @@ export default function AppHeader({ onSearch }) {
                                     )}
                                 </Link>
                                 <NotificationsDropdown />
-                                <Link href="/profil" className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors">
-                                    <div className="w-7 h-7 rounded-md bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                                <Link href="/profil" className="relative flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors">
+                                    <div className="w-7 h-7 rounded-md bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center relative">
                                         <span className="text-indigo-700 text-xs font-bold">
                                             {(user.displayName || user.email || 'U')[0].toUpperCase()}
                                         </span>
+                                        {friendRequestCount > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white">
+                                                    {friendRequestCount}
+                                                </span>
+                                            </span>
+                                        )}
                                     </div>
-                                    <span className="hidden md:block text-sm font-medium text-slate-700">
-                                        {user.displayName || 'Profil'}
-                                    </span>
+                                    <div className="hidden md:flex flex-col items-start leading-none">
+                                        <span className="text-sm font-bold text-slate-800">
+                                            {userData?.displayName || user.displayName || 'Profil'}
+                                        </span>
+                                        {userData?.badges && userData.badges.length > 0 && (
+                                            <div className="scale-75 origin-left mt-0.5">
+                                                <UserBadge badges={[userData.badges[0]]} />
+                                            </div>
+                                        )}
+                                    </div>
                                 </Link>
                             </>
                         ) : (
@@ -166,7 +251,8 @@ export default function AppHeader({ onSearch }) {
                             { href: "/ilan-olustur?hizli=otel", color: "indigo", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6", label: "Pati Oteli", sub: "Bakıcı / Otel" },
                             { href: "/ilan-olustur?hizli=kayip", color: "red", icon: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z", label: "Kayıp", sub: "Acil İhbar" },
                             { href: "/ilan-olustur?hizli=transfer", color: "cyan", icon: "M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.091-1.123l-.208-3.33a5.158 5.158 0 00-4.707-4.823l-2.001-.168M16.5 18.75V11.25m-10.5 6V11.25m-3 0h16.5", label: "Nakil", sub: "Pati Taksi" },
-                            { href: "/ilan-olustur?hizli=kan-bagisi", color: "red", icon: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z", label: "Kan Bağışı", sub: "Donör Arayışı" },
+                            { href: "/ilan-olustur?hizli=aksesuar-mama", color: "blue", icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z", label: "Pati Market", sub: "Aksesuar & Mama" },
+                            { href: "/yakinimdakiler", color: "emerald", icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z", label: "Patimetre", sub: "Yakınımdakiler" },
                         ].map((link, idx) => (
                             <Link key={idx} href={link.href} className="flex-1 flex items-center gap-3 p-2.5 rounded-xl hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 transition-all group">
                                 <div className={`w-9 h-9 rounded-full bg-${link.color}-500/10 text-${link.color}-600 flex items-center justify-center group-hover:bg-${link.color}-600 group-hover:text-white transition-colors`}>
@@ -197,12 +283,24 @@ export default function AppHeader({ onSearch }) {
                         <span className="text-[10px] font-black uppercase tracking-tighter">KEŞFET</span>
                     </Link>
 
-                    <div className="flex flex-col items-center justify-center flex-1 h-full text-slate-400 hover:text-orange-600 active:scale-95 transition-transform cursor-pointer">
-                        <svg className="w-6 h-6 mb-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <div
+                        onClick={() => user ? fileInputRef.current?.click() : router.push('/giris')}
+                        className="flex flex-col items-center justify-center flex-1 h-full text-slate-400 hover:text-indigo-600 active:scale-95 transition-transform cursor-pointer"
+                    >
+                        <svg className={`w-6 h-6 mb-1 shrink-0 ${isUploading ? 'animate-bounce text-indigo-500' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <span className="text-[10px] font-bold uppercase tracking-tighter">ARA</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tighter">HİKAYE</span>
                     </div>
+
+                    <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleStoryUpload}
+                    />
 
                     {/* MINIMALIST ILAN VER BUTONU - PREMIUM ORANGE */}
                     <div className="relative -top-6 flex flex-col items-center justify-center group">
@@ -232,12 +330,32 @@ export default function AppHeader({ onSearch }) {
                     </Link>
 
                     <Link href="/profil" className="flex flex-col items-center justify-center flex-1 h-full text-slate-400 hover:text-orange-600 active:scale-95 transition-transform">
-                        <div className="w-7 h-7 mb-1 rounded-full bg-slate-100 border-2 border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
-                            {user?.photoURL ? (
-                                <img src={user.photoURL} alt="Profil" className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-slate-600 text-[10px] font-black">
-                                    {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                        <div className="relative">
+                            <div className="w-7 h-7 mb-1 rounded-full bg-slate-100 border-2 border-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                                {userData?.photoURL ? (
+                                    <img src={userData.photoURL} alt="Profil" className="w-full h-full object-cover" />
+                                ) : user?.photoURL ? (
+                                    <img src={user.photoURL} alt="Profil" className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-slate-600 text-[10px] font-black">
+                                        {(userData?.displayName || user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                                    </span>
+                                )}
+                            </div>
+                            {userData?.badges && userData.badges.length > 0 && (
+                                <div className="absolute -top-1 -right-1.5 bg-white rounded-full p-0.5 shadow-sm border border-slate-100">
+                                    <span className="text-[10px] leading-none">
+                                        {userData.badges[0] === 'premium' ? '💎' :
+                                            userData.badges[0] === 'guvenilir' ? '🛡️' : '🐾'}
+                                    </span>
+                                </div>
+                            )}
+                            {friendRequestCount > 0 && (
+                                <span className="absolute -top-1.5 -left-1.5 flex h-4 w-4 z-20">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white flex items-center justify-center text-[9px] font-black text-white">
+                                        {friendRequestCount}
+                                    </span>
                                 </span>
                             )}
                         </div>

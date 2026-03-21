@@ -1,7 +1,5 @@
 import { getAllListingsServer } from '../lib/firebaseServer';
-import { generateListingSlug } from '../lib/seo';
-
-const SITE_URL = 'https://eldenele.app';
+import { generateListingSlug, SITE_URL } from '../lib/seo';
 
 export default async function sitemap() {
     const staticPages = [

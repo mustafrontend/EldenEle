@@ -97,14 +97,25 @@ function ChangeView({ center, zoom }) {
     return null;
 }
 
-export default function MapView({ listings }) {
-    // Determine center based on listings or default to Turkey center
-    let center = [39.0, 35.0];
-    let zoom = 5;
+export default function MapView({ listings = [], users = [], userCoords = null }) {
+    // Determine center based on user location or listings
+    let center = userCoords ? [userCoords.lat, userCoords.lng] : [39.0, 35.0];
+    let zoom = userCoords ? 12 : 5;
 
-    // Filter out listings without valid city mapping to avoid throwing them randomly
+    const mappedUsers = users.map(u => {
+        if (!u.location) return null;
+        // Jitter to avoid exact overlap
+        const offsetLat = (Math.random() - 0.5) * 0.002;
+        const offsetLng = (Math.random() - 0.5) * 0.002;
+        return {
+            ...u,
+            isUser: true,
+            coords: [u.location.lat + offsetLat, u.location.lng + offsetLng]
+        };
+    }).filter(Boolean);
+
+    // Filter out listings without valid city mapping
     const mappedListings = listings.map(l => {
-        // Öncelik ilçe (district), bulunamazsa şehir (city)
         let coords = null;
         if (l.district && districtCoordinates[l.district]) {
             coords = districtCoordinates[l.district];
@@ -112,10 +123,7 @@ export default function MapView({ listings }) {
             coords = cityCoordinates[l.city];
         }
 
-        // Eğer koordinat bulunduysa üst üste binmesin diye çok ufak sapma ekle
         if (coords) {
-            // Koordinat sapmasını (jitter) 0.05'ten 0.005'e çektik (~500 metre). 
-            // Sahil kenarındaki şehirlerde (Antalya, İzmir) 5km'lik sapma haritada ilanları denize düşürüyordu.
             const offsetLat = (Math.random() - 0.5) * 0.006;
             const offsetLng = (Math.random() - 0.5) * 0.006;
             return {
@@ -126,13 +134,11 @@ export default function MapView({ listings }) {
         return null;
     }).filter(Boolean);
 
-    if (mappedListings.length === 1) {
-        center = mappedListings[0].coords;
-        zoom = 10;
-    }
+    // If both are present, merge for display
+    const itemsToShow = [...mappedListings, ...mappedUsers];
 
     return (
-        <div className="w-full h-[600px] bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative z-0">
+        <div className="w-full h-full bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 shadow-sm relative z-0">
             <MapContainer center={center} zoom={zoom} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }}>
                 <ChangeView center={center} zoom={zoom} />
                 <TileLayer
@@ -140,34 +146,57 @@ export default function MapView({ listings }) {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                 />
 
-                {mappedListings.map(listing => (
-                    <Marker key={listing.id} position={listing.coords} icon={createCustomIcon(listing)}>
+                {/* Current User Marker */}
+                {userCoords && (
+                    <Marker position={[userCoords.lat, userCoords.lng]} icon={L.divIcon({
+                        className: 'user-marker',
+                        html: '<div class="w-6 h-6 bg-indigo-600 border-4 border-white rounded-full shadow-lg shadow-indigo-300 animate-pulse"></div>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })}>
+                        <Popup>Buradasınız 📍</Popup>
+                    </Marker>
+                )}
+
+                {itemsToShow.map(item => (
+                    <Marker key={item.id} position={item.coords} icon={createCustomIcon(item.isUser ? { ...item, concept: 'user' } : item)}>
                         <Popup className="custom-popup">
-                            <a href={`/ilan/${listing.id}`} className="block w-48 no-underline group">
-                                <div className="h-24 bg-slate-100 rounded-t-xl overflow-hidden mb-2 relative">
-                                    {listing.userIsFeatured && (
-                                        <div className="absolute top-1 right-1 z-[100] bg-orange-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
-                                            Vitrin
-                                        </div>
-                                    )}
-                                    {listing.photos && listing.photos.length > 0 ? (
-                                        <img src={listing.photos[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-300">Resim Yok</div>
-                                    )}
+                            {item.isUser ? (
+                                <div className="p-2 w-40 text-center">
+                                    <div className="w-12 h-12 mx-auto rounded-full overflow-hidden bg-slate-100 mb-2 border border-slate-200">
+                                        {item.photoURL ? <img src={item.photoURL} className="w-full h-full object-cover" /> : <span className="text-xl">👤</span>}
+                                    </div>
+                                    <h4 className="font-bold text-slate-800 text-sm">{item.displayName}</h4>
+                                    <p className="text-[10px] text-slate-500 uppercase font-black">{item.city || 'Yakınlarda'}</p>
+                                    <Link href="/yakinimdakiler" className="block mt-2 py-1 px-3 bg-indigo-600 text-white text-[10px] font-bold rounded-lg uppercase tracking-widest">Profili Gör</Link>
                                 </div>
-                                <div className="px-2 pb-2">
-                                    <h4 className="font-bold text-slate-900 text-sm line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors">{listing.title}</h4>
-                                    <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{listing.category}</span>
-                                    <div className="text-[10px] text-slate-500 mt-2 line-clamp-2">{listing.description}</div>
-                                </div>
-                            </a>
+                            ) : (
+                                <a href={`/ilan/${item.id}`} className="block w-48 no-underline group">
+                                    <div className="h-24 bg-slate-100 rounded-t-xl overflow-hidden mb-2 relative">
+                                        {item.userIsFeatured && (
+                                            <div className="absolute top-1 right-1 z-[100] bg-orange-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
+                                                Vitrin
+                                            </div>
+                                        )}
+                                        {item.photos && item.photos.length > 0 ? (
+                                            <img src={item.photos[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-300">Resim Yok</div>
+                                        )}
+                                    </div>
+                                    <div className="px-2 pb-2">
+                                        <h4 className="font-bold text-slate-900 text-sm line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors">{item.title}</h4>
+                                        <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">{item.category}</span>
+                                        <div className="text-[10px] text-slate-500 mt-2 line-clamp-2">{item.description}</div>
+                                    </div>
+                                </a>
+                            )}
                         </Popup>
                     </Marker>
                 ))}
             </MapContainer>
 
-            {mappedListings.length === 0 && (
+            {itemsToShow.length === 0 && !userCoords && (
                 <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/80 backdrop-blur-sm">
                     <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 text-center">
                         <span className="text-4xl block mb-2">🌍</span>
@@ -177,84 +206,6 @@ export default function MapView({ listings }) {
                 </div>
             )}
 
-            <style jsx global>{`
-                .leaflet-popup-content-wrapper {
-                    padding: 0;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-                }
-                .leaflet-popup-content {
-                    margin: 0;
-                    line-height: 1.4;
-                }
-                
-                /* Custom Map Pins (Dropshape) */
-                .custom-map-marker {
-                    position: relative;
-                }
-                
-                .pin-container {
-                    width: 38px;
-                    height: 38px;
-                    border-radius: 50% 50% 50% 0;
-                    background: #fff;
-                    position: absolute;
-                    transform: rotate(-45deg);
-                    left: 50%;
-                    top: 50%;
-                    margin: -23px 0 0 -19px;
-                    box-shadow: 0 6px 12px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.1);
-                    border: 2.5px solid #fff;
-                    overflow: hidden;
-                    z-index: 2;
-                    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-                }
-                
-                /* Hover effect for pins */
-                .custom-map-marker:hover .pin-container {
-                    transform: rotate(-45deg) scale(1.15);
-                    border-color: #4f46e5;
-                    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
-                }
-
-                .featured-pin .pin-container {
-                    border-color: #f97316; /* Orange border for featured */
-                    box-shadow: 0 6px 12px rgba(249, 115, 22, 0.3);
-                }
-
-                .pin-img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    /* Un-rotate the image so it stands straight inside the rotated dropshape */
-                    transform: rotate(45deg) scale(1.4);
-                }
-
-                .pin-icon {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    /* Un-rotate the icon */
-                    transform: rotate(45deg);
-                    font-size: 18px;
-                    background: #f8fafc;
-                }
-                
-                .pin-shadow {
-                    width: 14px;
-                    height: 6px;
-                    background: rgba(0, 0, 0, 0.3);
-                    border-radius: 50%;
-                    position: absolute;
-                    bottom: -20px;
-                    left: 50%;
-                    margin-left: -7px;
-                    filter: blur(2px);
-                }
-            `}</style>
         </div>
     );
 }

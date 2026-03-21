@@ -1,9 +1,32 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { getAllListings, getAllUsers, deleteUser, deleteListing, getAllMessages, toggleUserFeatured, getBotStatus, updateBotStatus, createAdminFakeListing, adminUpdateUser, adminUpdateListing, uploadPhotos, getAllVisitors } from '../../lib/listingService';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { toast } from 'react-hot-toast';
+import { getAllListings, getAllUsers, deleteUser, deleteListing, getAllMessages, toggleUserFeatured, getBotStatus, updateBotStatus, createAdminFakeListing, adminUpdateUser, adminUpdateListing, uploadPhotos, getAllVisitors, getAllNews, createNews, updateNews, deleteNews } from '../../lib/listingService';
 import { getAllPosts, deletePost, createAdminFakePost, adminUpdatePost, subscribeComments, createComment } from '../../lib/communityService';
 import AppHeader from '../../components/AppHeader';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Global WhatsApp API Helper
+const sendWA = async (phone, body) => {
+    if (!phone) return toast.error('Telefon numarası bulunamadı!');
+    const tid = toast.loading('WhatsApp gönderiliyor...');
+    try {
+        const res = await fetch('/api/whatsapp/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: phone, body })
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast.success('Mesaj başarıyla gönderildi! 🐾', { id: tid });
+        } else {
+            toast.error('Hata: ' + data.error, { id: tid });
+        }
+    } catch (e) {
+        toast.error('Gönderim sırasında hata oluştu!', { id: tid });
+    }
+};
 
 export default function AdminPage() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -16,6 +39,7 @@ export default function AdminPage() {
     const [posts, setPosts] = useState([]);
     const [messages, setMessages] = useState([]);
     const [visitors, setVisitors] = useState([]);
+    const [news, setNews] = useState([]);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('summary');
     const [botStatus, setBotStatus] = useState({ postsEnabled: true, listingsEnabled: true });
@@ -41,18 +65,20 @@ export default function AdminPage() {
     async function loadData() {
         setLoading(true);
         try {
-            const [u, l, p, m, v] = await Promise.all([
+            const [u, l, p, m, v, n] = await Promise.all([
                 getAllUsers(),
                 getAllListings(),
                 getAllPosts(),
                 getAllMessages(),
-                getAllVisitors()
+                getAllVisitors(),
+                getAllNews()
             ]);
             setUsers(u);
             setListings(l);
             setPosts(p);
             setMessages(m);
             setVisitors(v);
+            setNews(n);
         } catch (e) {
             console.error(e);
         } finally {
@@ -73,7 +99,7 @@ export default function AdminPage() {
         try {
             await updateBotStatus(key, newValue);
         } catch (e) {
-            alert('Bot ayarı güncellenemedi');
+            toast.error('Bot ayarı güncellenemedi');
         }
     }
 
@@ -87,10 +113,10 @@ export default function AdminPage() {
         try {
             const newStatus = await toggleUserFeatured(userId, currentStatus);
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, isFeatured: newStatus } : u));
-            alert('Kullanıcının öne çıkarma durumu başarıyla güncellendi.');
+            toast.success('Kullanıcı durumu güncellendi.');
         } catch (e) {
             console.error(e);
-            alert('Hata oluştu');
+            toast.error('Hata oluştu');
         }
     }
 
@@ -99,7 +125,8 @@ export default function AdminPage() {
         try {
             await deleteUser(id);
             setUsers(prev => prev.filter(u => u.id !== id));
-        } catch (e) { alert('Hata oluştu'); }
+            toast.success('Kullanıcı silindi.');
+        } catch (e) { toast.error('Hata oluştu'); }
     }
 
     async function handleDeleteListing(id) {
@@ -107,7 +134,8 @@ export default function AdminPage() {
         try {
             await deleteListing(id);
             setListings(prev => prev.filter(l => l.id !== id));
-        } catch (e) { alert('Hata oluştu'); }
+            toast.success('İlan silindi.');
+        } catch (e) { toast.error('Hata oluştu'); }
     }
 
     async function handleDeletePost(id) {
@@ -115,7 +143,28 @@ export default function AdminPage() {
         try {
             await deletePost(id);
             setPosts(prev => prev.filter(p => p.id !== id));
-        } catch (e) { alert('Hata oluştu'); }
+            toast.success('Paylaşım silindi.');
+        } catch (e) { toast.error('Hata oluştu'); }
+    }
+
+    async function handleDeleteNews(id) {
+        if (!window.confirm('Bu duyuruyu silmek istediğinize emin misiniz?')) return;
+        try {
+            await deleteNews(id);
+            setNews(prev => prev.filter(n => n.id !== id));
+            toast.success('Duyuru silindi.');
+        } catch (e) { toast.error('Hata oluştu'); }
+    }
+
+    async function handleToggleNewsActive(id, currentStatus) {
+        try {
+            await updateNews(id, { isActive: !currentStatus });
+            setNews(prev => prev.map(n => n.id === id ? { ...n, isActive: !currentStatus } : n));
+            toast.success('Duyuru durumu güncellendi.');
+        } catch (e) {
+            console.error("Duyuru güncelleme hatası:", e);
+            toast.error('Hata: ' + (e.message || 'Bilinmeyen hata'));
+        }
     }
 
     if (!isLoggedIn) {
@@ -212,21 +261,25 @@ export default function AdminPage() {
                 {/* Tabs */}
                 <div className="flex gap-2 p-1 bg-slate-200/50 rounded-2xl w-full sm:w-fit mb-8 overflow-x-auto whitespace-nowrap scrollbar-hide">
                     <Tab title="Özet" active={activeTab === 'summary'} onClick={() => setActiveTab('summary')} />
+                    <Tab title="Webmaster AI 🤖" active={activeTab === 'webmaster'} onClick={() => setActiveTab('webmaster')} />
                     <Tab title="Ziyaretçiler" active={activeTab === 'visitors'} onClick={() => setActiveTab('visitors')} />
                     <Tab title="Kullanıcılar" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
                     <Tab title="İlanlar" active={activeTab === 'listings'} onClick={() => setActiveTab('listings')} />
                     <Tab title="Gönderiler" active={activeTab === 'posts'} onClick={() => setActiveTab('posts')} />
                     <Tab title="Mesajlar (DM)" active={activeTab === 'messages'} onClick={() => setActiveTab('messages')} />
+                    <Tab title="Duyurular (Haberler)" active={activeTab === 'news'} onClick={() => setActiveTab('news')} />
                 </div>
 
                 {/* Tables */}
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-                    {activeTab === 'summary' && <SummaryTab listings={listings} posts={posts} />}
+                    {activeTab === 'summary' && <SummaryTab listings={listings} posts={posts} visitors={visitors} />}
+                    {activeTab === 'webmaster' && <WebmasterTab users={users} listings={listings} visitors={visitors} news={news} posts={posts} />}
                     {activeTab === 'visitors' && <VisitorsTab visitors={visitors} />}
-                    {activeTab === 'users' && <UsersTab users={users} onDelete={handleDeleteUser} onToggleFeatured={handleToggleFeatured} />}
+                    {activeTab === 'users' && <UsersTab users={users} onDelete={handleDeleteUser} onToggleFeatured={handleToggleFeatured} onRefresh={loadData} />}
                     {activeTab === 'listings' && <ListingsTab listings={listings} users={users} onDelete={handleDeleteListing} onRefresh={loadData} />}
                     {activeTab === 'posts' && <PostsTab posts={posts} onDelete={handleDeletePost} onRefresh={loadData} />}
-                    {activeTab === 'messages' && <MessagesTab messages={messages} />}
+                    {activeTab === 'messages' && <MessagesTab messages={messages} users={users} listings={listings} />}
+                    {activeTab === 'news' && <NewsTab news={news} onDelete={handleDeleteNews} onToggleActive={handleToggleNewsActive} onRefresh={loadData} />}
                 </div>
             </div>
         </div>
@@ -262,49 +315,137 @@ function Tab({ title, active, onClick }) {
     );
 }
 
-function SummaryTab({ listings, posts }) {
+function SummaryTab({ listings, posts, visitors }) {
+    const totalViews = listings.reduce((sum, l) => sum + (l.views || 0), 0) + posts.reduce((sum, p) => sum + (p.views || 0), 0);
+    const totalWhatsApp = listings.reduce((sum, l) => sum + (l.whatsappClicks || 0), 0);
+    const totalVisitors = visitors.length;
+
+    // Timeline logic for visitors
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        d.setHours(0, 0, 0, 0);
+        return {
+            dateStr: d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'narrow' }),
+            timestamp: d.getTime(),
+            visitors: 0
+        };
+    });
+
+    visitors.forEach(v => {
+        if (!v.timestamp?.seconds) return;
+        const vDate = new Date(v.timestamp.seconds * 1000);
+        vDate.setHours(0, 0, 0, 0);
+        const dayMatch = last7Days.find(d => d.timestamp === vDate.getTime());
+        if (dayMatch) {
+            dayMatch.visitors += 1;
+        }
+    });
+
+    const visitorsToday = last7Days[6].visitors;
+
     const all = [
-        ...listings.map(l => ({ ...l, itemType: 'İlan' })),
-        ...posts.map(p => ({ ...p, itemType: 'Topluluk', title: p.content.substring(0, 40) + '...' }))
+        ...listings.map(l => ({ ...l, itemType: 'İlan', title: l.title || 'İsimsiz İlan' })),
+        ...posts.map(p => ({ ...p, itemType: 'Topluluk', title: (p.content || '').substring(0, 40) + '...' }))
     ].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 10);
 
     return (
         <div className="p-8">
             <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
                 <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
-                En Çok İzlenen İçerikler
+                Sistem Özeti & Performans
             </h2>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-slate-100 italic">
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tür</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Başlık_İçerik</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Sahibi</th>
-                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">WhatsApp</th>
-                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İzlenme</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {all.map(item => (
-                            <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 px-4">
-                                    <span className={`text-[10px] font-black px-2 py-1 rounded-md ${item.itemType === 'İlan' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                        {item.itemType.toUpperCase()}
-                                    </span>
-                                </td>
-                                <td className="py-4 px-4 text-sm font-bold text-slate-900">{item.title}</td>
-                                <td className="py-4 px-4 text-sm text-slate-500">{item.userName}</td>
-                                <td className="py-4 px-4 text-right">
-                                    <span className="bg-[#25D366] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{item.whatsappClicks || 0}</span>
-                                </td>
-                                <td className="py-4 px-4 text-right">
-                                    <span className="bg-slate-900 text-white text-xs font-black px-3 py-1 rounded-full border border-white/10">{item.views || 0}</span>
-                                </td>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5 rounded-2xl shadow-sm">
+                    <div className="text-[10px] uppercase font-black tracking-widest text-indigo-400 mb-1">Bugünkü Tekil Ziyaret</div>
+                    <div className="text-3xl font-black text-indigo-700">{visitorsToday.toLocaleString('tr-TR')}</div>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-100 p-5 rounded-2xl shadow-sm">
+                    <div className="text-[10px] uppercase font-black tracking-widest text-emerald-400 mb-1">Toplam Ziyaret (Log)</div>
+                    <div className="text-3xl font-black text-emerald-700">{totalVisitors.toLocaleString('tr-TR')}</div>
+                </div>
+                <div className="bg-gradient-to-br from-rose-50 to-white border border-rose-100 p-5 rounded-2xl shadow-sm">
+                    <div className="text-[10px] uppercase font-black tracking-widest text-rose-400 mb-1">Tüm Görüntülenmeler</div>
+                    <div className="text-3xl font-black text-rose-700">{totalViews.toLocaleString('tr-TR')}</div>
+                </div>
+                <div className="bg-gradient-to-br from-[#25D366]/10 to-white border border-[#25D366]/20 p-5 rounded-2xl shadow-sm">
+                    <div className="text-[10px] uppercase font-black tracking-widest text-[#25D366] mb-1">WP Tıklama & Yönlendirme</div>
+                    <div className="text-3xl font-black text-[#1FAF53]">{totalWhatsApp.toLocaleString('tr-TR')}</div>
+                </div>
+            </div>
+
+            {/* Visitor Traffic Chart */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+                    Son 7 Günlük Ziyaretçi Trafiği
+                </h3>
+                <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={last7Days}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="dateStr" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} allowDecimals={false} />
+                            <Tooltip
+                                cursor={{ stroke: '#e2e8f0', strokeWidth: 2 }}
+                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 'bold', fontSize: '12px' }}
+                                labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                            />
+                            <Line type="monotone" dataKey="visitors" name="Ziyaretçi" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#6366f1' }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+                <div className="bg-slate-50 border-b border-slate-100 px-5 py-4">
+                    <h3 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <svg className="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                        En Çok Etkileşim Alan 10 İçerik
+                    </h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-slate-100 italic bg-white">
+                                <th className="text-left py-3 px-5 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Tür</th>
+                                <th className="text-left py-3 px-5 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Başlık_İçerik</th>
+                                <th className="text-left py-3 px-5 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Sahibi</th>
+                                <th className="text-right py-3 px-5 text-slate-400 font-bold uppercase tracking-widest text-[9px]">WhatsApp</th>
+                                <th className="text-right py-3 px-5 text-slate-400 font-bold uppercase tracking-widest text-[9px]">İzlenme</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {all.map(item => (
+                                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="py-3 px-5">
+                                        <span className={`text-[9px] font-black px-2 py-1 rounded-[4px] uppercase tracking-wider ${item.itemType === 'İlan' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {item.itemType}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-5 text-xs font-bold text-slate-900">{item.title}</td>
+                                    <td className="py-3 px-5 text-xs font-medium text-slate-500">{item.userName || '-'}</td>
+                                    <td className="py-3 px-5 text-right">
+                                        {item.whatsappClicks > 0 ? (
+                                            <span className="bg-[#25D366]/10 text-[#25D366] text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter">
+                                                {item.whatsappClicks} TIK
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-300 text-[10px] font-bold">-</span>
+                                        )}
+                                    </td>
+                                    <td className="py-3 px-5 text-right">
+                                        <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                                            {item.views || 0}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -455,6 +596,7 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
     const [isVisible, setIsVisible] = useState(false);
     const [phone, setPhone] = useState(u.phone || '');
     const [password, setPassword] = useState(u.password || '');
+    const [tokens, setTokens] = useState(u.tokens || 0);
     const [badgesInput, setBadgesInput] = useState((u.badges || []).join(', '));
     const [loading, setLoading] = useState(false);
 
@@ -462,10 +604,10 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
         setLoading(true);
         try {
             const badgesArr = badgesInput.split(',').map(s => s.trim()).filter(Boolean);
-            await adminUpdateUser(u.id, { phone, password, badges: badgesArr });
-            alert('Güncellendi');
+            await adminUpdateUser(u.id, { phone, password, tokens: Number(tokens), badges: badgesArr });
+            toast.success('Güncellendi');
         } catch (e) {
-            alert('Hata!');
+            toast.error('Hata!');
         } finally {
             setLoading(false);
         }
@@ -481,8 +623,17 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
                     {u.displayName}
                 </div>
             </td>
-            <td className="py-4 px-4">
-                <input value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold" />
+            <td className="py-4 px-4 flex items-center gap-2">
+                <input value={phone} onChange={e => setPhone(e.target.value)} className="flex-1 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold" />
+                {phone && (
+                    <button
+                        onClick={() => sendWA(phone, `Merhaba ${u.displayName}, EldenEle ekibi olarak sizinle iletişime geçiyoruz.`)}
+                        className="p-1.5 bg-[#25D366] text-white rounded-md hover:scale-110 active:scale-95 transition-all shadow-sm"
+                        title="WhatsApp Yaz"
+                    >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.313 1.592 5.448 0 9.886-4.438 9.889-9.886.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.821-.98zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" /></svg>
+                    </button>
+                )}
             </td>
             <td className="py-4 px-4">
                 <input
@@ -490,6 +641,14 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
                     onChange={e => setBadgesInput(e.target.value)}
                     placeholder="premium, pati_dostu..."
                     className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold"
+                />
+            </td>
+            <td className="py-4 px-4">
+                <input
+                    type="number"
+                    value={tokens}
+                    onChange={e => setTokens(e.target.value)}
+                    className="w-16 bg-white border border-slate-200 rounded px-2 py-1 text-xs font-black text-indigo-600"
                 />
             </td>
             <td className="py-4 px-4">
@@ -507,7 +666,7 @@ function UserRow({ u, onDelete, onToggleFeatured, isRealUser }) {
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </button>
             </td>
-        </tr>
+        </tr >
     );
 }
 
@@ -535,7 +694,7 @@ function UsersTab({ users, onDelete, onToggleFeatured, onRefresh }) {
             setQPhone('');
             setQPassword('');
             if (onRefresh) onRefresh();
-        } catch (e) { alert("Hata"); }
+        } catch (e) { toast.error("Kullanıcı oluşturulurken bir hata oluştu."); }
         finally { setLoading(false); }
     }
 
@@ -577,7 +736,8 @@ function UsersTab({ users, onDelete, onToggleFeatured, onRefresh }) {
                         <tr className="border-b border-slate-100 font-black italic">
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Kullanıcı / ID</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Telefon No</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Rozetler (Virgülle)</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Rozetler (Görsel)</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Jetonlar</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Şifre / Güncelle</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Kayıt</th>
                             <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aksiyon</th>
@@ -601,6 +761,7 @@ function ListingRow({ l, onDelete }) {
     const [description, setDescription] = useState(l.description || '');
     const [userPhone, setUserPhone] = useState(l.userPhone || '');
     const [photos, setPhotos] = useState(l.photos || []);
+    const [userIsFeatured, setUserIsFeatured] = useState(l.userIsFeatured || false);
     const [loading, setLoading] = useState(false);
     const fileRef = useRef(null);
 
@@ -613,11 +774,12 @@ function ListingRow({ l, onDelete }) {
                 concept,
                 description: description.trim(),
                 userPhone: userPhone.trim(),
-                photos
+                photos,
+                userIsFeatured
             });
-            alert('İlan başarıyla güncellendi.');
+            toast.success('İlan başarıyla güncellendi.');
         } catch (e) {
-            alert('Hata!');
+            toast.error('Güncelleme sırasında bir hata oluştu.');
         } finally {
             setLoading(false);
         }
@@ -696,12 +858,23 @@ function ListingRow({ l, onDelete }) {
                         className="bg-transparent border-none focus:ring-0 text-xs font-bold text-slate-600 p-0 w-24 outline-none"
                         placeholder="Şehir"
                     />
-                    <input
-                        value={userPhone}
-                        onChange={e => setUserPhone(e.target.value)}
-                        className="bg-transparent border-none focus:ring-0 text-[11px] font-black text-indigo-600 p-0 w-24 outline-none"
-                        placeholder="05XX..."
-                    />
+                    <div className="flex items-center gap-2">
+                        <input
+                            value={userPhone}
+                            onChange={e => setUserPhone(e.target.value)}
+                            className="bg-transparent border-none focus:ring-0 text-[11px] font-black text-indigo-600 p-0 w-24 outline-none"
+                            placeholder="05XX..."
+                        />
+                        {userPhone && (
+                            <button
+                                onClick={() => sendWA(userPhone, `Merhaba, '${title}' ilanınız hakkında EldenEle ekibi olarak sizinle iletişime geçiyoruz.`)}
+                                className="p-1 bg-[#25D366] text-white rounded shadow-sm hover:scale-110 active:scale-95 transition-all"
+                                title="WhatsApp Gönder"
+                            >
+                                <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.313 1.592 5.448 0 9.886-4.438 9.889-9.886.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.821-.98zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" /></svg>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </td>
 
@@ -726,6 +899,15 @@ function ListingRow({ l, onDelete }) {
                         <span className="text-[10px] font-black leading-none">{l.views || 0}</span>
                         <span className="text-[7px] uppercase font-bold opacity-50">Göz</span>
                     </div>
+                    <button
+                        onClick={() => setUserIsFeatured(!userIsFeatured)}
+                        className={`p-2.5 rounded-xl transition-all shadow-sm ${userIsFeatured ? 'bg-amber-500 text-white shadow-amber-200' : 'bg-slate-100 text-slate-400'}`}
+                        title={userIsFeatured ? "Öne Çıkarılmış" : "Öne Çıkar"}
+                    >
+                        <svg className="w-4 h-4" fill={userIsFeatured ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                        </svg>
+                    </button>
                     <button
                         onClick={handleUpdate}
                         disabled={loading}
@@ -758,7 +940,32 @@ function ListingsTab({ listings, users = [], onDelete, onRefresh }) {
     const [desc, setDesc] = useState('');
     const [photoFiles, setPhotoFiles] = useState([]);
     const [previews, setPreviews] = useState([]);
+    const [isFeatured, setIsFeatured] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [expandedGroups, setExpandedGroups] = useState(new Set());
+
+    const toggleGroup = (uid) => {
+        const next = new Set(expandedGroups);
+        if (next.has(uid)) next.delete(uid);
+        else next.add(uid);
+        setExpandedGroups(next);
+    };
+
+    const groupedListings = useMemo(() => {
+        const groups = {};
+        listings.forEach(l => {
+            const uid = l.userId || 'Bilinmeyen_Kullanici';
+            if (!groups[uid]) {
+                groups[uid] = {
+                    userId: uid,
+                    userName: l.userName || 'İsimsiz Kullanıcı',
+                    listings: []
+                };
+            }
+            groups[uid].listings.push(l);
+        });
+        return Object.values(groups).sort((a, b) => b.listings.length - a.listings.length);
+    }, [listings]);
 
     // Search filter for user combobox
     const filteredUsers = users.filter(u =>
@@ -794,8 +1001,9 @@ function ListingsTab({ listings, users = [], onDelete, onRefresh }) {
                 concept,
                 city,
                 description: desc.trim(),
-                userIsFeatured: selectedUser.isFeatured || false
+                userIsFeatured: isFeatured
             }, photoFiles);
+            setIsFeatured(false);
             setSelectedUserId('');
             setTitle('');
             setDesc('');
@@ -897,15 +1105,28 @@ function ListingsTab({ listings, users = [], onDelete, onRefresh }) {
                                 <option value="Diğer">Diğer</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">İlan Konsepti</label>
-                            <select value={concept} onChange={e => setConcept(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-slate-800 outline-none">
-                                <option value="takas">Takas</option>
-                                <option value="sahiplendirme">Sahiplendirme</option>
-                                <option value="bedelsiz">Ücretsiz</option>
-                                <option value="geridonusum">Geri Dönüşüm</option>
-                                <option value="odunc">Ödünç</option>
-                            </select>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">İlan Konsepti</label>
+                                <select value={concept} onChange={e => setConcept(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-slate-800 outline-none">
+                                    <option value="takas">Takas</option>
+                                    <option value="sahiplendirme">Sahiplendirme</option>
+                                    <option value="bedelsiz">Ücretsiz</option>
+                                    <option value="geridonusum">Geri Dönüşüm</option>
+                                    <option value="odunc">Ödünç</option>
+                                </select>
+                            </div>
+                            <div className="flex items-end flex-1">
+                                <label className="flex items-center gap-2 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-full select-none hover:bg-amber-100 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={isFeatured}
+                                        onChange={e => setIsFeatured(e.target.checked)}
+                                        className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-tighter">İlanı Öne Çıkar</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div>
@@ -917,24 +1138,64 @@ function ListingsTab({ listings, users = [], onDelete, onRefresh }) {
                     </button>
                 </form>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-slate-100 italic">
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İlan & Foto</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Kategori / Tür</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Bölge / Tel</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Açıklama</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">İstatistik</th>
-                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aksiyon</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {listings.map(l => (
-                            <ListingRow key={l.id} l={l} onDelete={onDelete} />
-                        ))}
-                    </tbody>
-                </table>
+            <div className="space-y-8">
+                {groupedListings.map(group => {
+                    const isExpanded = expandedGroups.has(group.userId);
+                    const totalWp = group.listings.reduce((sum, l) => sum + (l.whatsappClicks || 0), 0);
+                    const totalViews = group.listings.reduce((sum, l) => sum + (l.views || 0), 0);
+
+                    return (
+                        <div key={group.userId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] transition-all">
+                            <div
+                                onClick={() => toggleGroup(group.userId)}
+                                className="bg-slate-50/80 px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm border border-indigo-100 shadow-inner">
+                                        {(group.userName[0] || 'U').toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-extrabold text-sm text-slate-900 tracking-tight leading-none mb-1 flex items-center gap-2">
+                                            {group.userName}
+                                            <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{group.userId.slice(-6)}</span>
+                                            {totalWp > 0 && <span className="text-[9px] font-black text-[#25D366] bg-[#25D366]/10 px-1.5 py-0.5 rounded uppercase tracking-tighter">{totalWp} WP TIK.</span>}
+                                            {totalViews > 0 && <span className="text-[9px] font-black text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase tracking-tighter">{totalViews} GÖZ.</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-lg shadow-sm">
+                                    {group.listings.length} AKTİF İLAN
+                                </div>
+                            </div>
+                            {isExpanded && (
+                                <div className="overflow-x-auto border-t border-slate-100">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b border-slate-100 italic bg-white">
+                                                <th className="text-left py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">İlan & Foto</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Kategori / Tür</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Bölge / Tel</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Açıklama</th>
+                                                <th className="text-left py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">İstatistik</th>
+                                                <th className="text-right py-3 px-4 text-slate-400 font-bold uppercase tracking-widest text-[9px]">Aksiyon</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {group.listings.map(l => (
+                                                <ListingRow key={l.id} l={l} onDelete={onDelete} />
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -952,9 +1213,9 @@ function PostRow({ p, onDelete }) {
         setLoading(true);
         try {
             await adminUpdatePost(p.id, { content, type, imageUrl });
-            alert('Güncellendi');
+            toast.success('Güncellendi');
         } catch (e) {
-            alert('Hata!');
+            toast.error('Hata!');
         } finally {
             setLoading(false);
         }
@@ -967,7 +1228,7 @@ function PostRow({ p, onDelete }) {
         try {
             const urls = await uploadPhotos([file]);
             setImageUrl(urls[0]);
-        } catch (e) { alert("Hata"); }
+        } catch (e) { toast.error("Hata"); }
         finally { setLoading(false); }
     }
 
@@ -1214,68 +1475,622 @@ function PostsTab({ posts, onDelete, onRefresh }) {
     );
 }
 
-function MessagesTab({ messages }) {
+function MessagesTab({ messages, users, listings }) {
+    // Daha hızlı arama için kullanıcı ve ilan haritası oluştur
+    const userMap = new Map();
+    users.forEach(u => userMap.set(u.id, u));
+
+    const listingMap = new Map();
+    listings.forEach(l => listingMap.set(l.id, l));
+
     return (
         <div className="p-8">
-            <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                <span className="w-2 h-8 bg-rose-500 rounded-full"></span>
-                Kullanıcı Özel Mesajları (DM)
-            </h2>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <span className="w-2 h-8 bg-rose-500 rounded-full"></span>
+                    Kullanıcı Özel Mesajları (DM)
+                </h2>
+                <div className="flex gap-2">
+                    <div className="px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-100 flex items-center gap-2 shadow-sm">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                            {messages.filter(m => !m.read).length} OKUNMAYAN
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Gizlilik Uyarı: Bu ekran sadece sistem yöneticileri tarafından güvenlik ihlallerini (dolandırıcılık, platform dışı ödeme vs.) denetlemek amacıyla kullanılmalıdır.
+                <span className="leading-tight">Gizlilik Uyarı: Bu ekran sadece sistem yöneticileri tarafından dolandırıcılık veya platform dışı ödeme girişimlerini denetlemek amacıyla kullanılmalıdır.</span>
             </div>
 
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b border-slate-100 italic">
+                        <tr className="border-b border-slate-100 italic bg-slate-50/30">
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Gönderen</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Alıcı ID</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px] w-1/2">Mesaj İçeriği</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Alıcı & İletişim</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px] w-1/3">Mesaj İçeriği</th>
                             <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tarih</th>
-                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Durum</th>
+                            <th className="text-center py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Durum</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                         {messages.length === 0 ? (
                             <tr>
-                                <td colSpan="5" className="py-8 text-center text-slate-500 text-sm font-medium">Henüz mesaj bulunmuyor.</td>
+                                <td colSpan="5" className="py-12 text-center text-slate-500 text-sm font-medium">Henüz mesaj bulunmuyor.</td>
                             </tr>
                         ) : (
-                            messages.map(m => (
-                                <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <td className="py-4 px-4">
-                                        <div className="text-sm font-bold text-slate-900">{m.senderName || 'İsimsiz'}</div>
-                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{m.senderId?.substring(0, 8)}...</div>
-                                    </td>
-                                    <td className="py-4 px-4">
-                                        <div className="text-[10px] text-indigo-600 bg-indigo-50 font-mono px-2 py-1 rounded inline-block">
-                                            {m.receiverId?.substring(0, 8)}...
-                                        </div>
-                                    </td>
-                                    <td className="py-4 px-4">
-                                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 font-medium">
-                                            {m.text}
-                                        </div>
-                                    </td>
-                                    <td className="py-4 px-4 text-xs font-medium text-slate-500">
-                                        {m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}
-                                    </td>
-                                    <td className="py-4 px-4">
-                                        {m.read ? (
-                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">Okundu</span>
-                                        ) : (
-                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">Okunmadı</span>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
+                            messages.map(m => {
+                                const receiver = userMap.get(m.receiverId);
+                                const sender = userMap.get(m.senderId);
+                                const listing = listingMap.get(m.listingId);
+                                const receiverPhone = receiver?.phone || '';
+
+                                const waMessage = listing
+                                    ? `Merhaba ${receiver?.displayName}, '${listing.title}' ilanınız için EldenEle üzerinden yeni bir mesajınız var. Müsait olduğunuzda kontrol edebilirsiniz.`
+                                    : `Merhaba ${receiver?.displayName}, EldenEle üzerinden yeni bir mesajınız var. Müsait olduğunuzda kontrol edebilirsiniz.`;
+
+                                return (
+                                    <tr key={m.id} className={`hover:bg-slate-50/80 transition-all ${!m.read ? 'bg-amber-50/10' : ''}`}>
+                                        <td className="py-4 px-4">
+                                            <div className="text-sm font-bold text-slate-900">{m.senderName || 'İsimsiz'}</div>
+                                            <div className="text-[9px] text-slate-400 font-black uppercase tracking-tighter mt-0.5 opacity-60">ID: {m.senderId?.substring(0, 8)}</div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col">
+                                                    <div className="text-xs font-black text-slate-700">{receiver?.displayName || 'Yükleniyor...'}</div>
+                                                    <div className="text-[9px] text-indigo-500 font-mono opacity-80">{m.receiverId?.substring(0, 8)}...</div>
+                                                </div>
+                                                {receiverPhone && (
+                                                    <button
+                                                        onClick={() => sendWA(receiverPhone, waMessage)}
+                                                        className="p-1.5 bg-[#25D366] text-white rounded-lg hover:bg-[#128C7E] transition-colors shadow-sm active:scale-95"
+                                                        title="WhatsApp ile İletişime Geç"
+                                                    >
+                                                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.313 1.592 5.448 0 9.886-4.438 9.889-9.886.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.821-.98zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" /></svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="bg-white border border-slate-100 rounded-xl p-3 text-[13px] text-slate-700 font-medium shadow-sm leading-relaxed max-w-md">
+                                                {m.text}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="text-[11px] font-bold text-slate-500">{m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000).toLocaleDateString('tr-TR') : '-'}</div>
+                                            <div className="text-[9px] font-black text-slate-400 uppercase">{m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            {m.read ? (
+                                                <span className="text-[9px] font-black px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 uppercase tracking-tighter">Okundu</span>
+                                            ) : (
+                                                <span className="text-[9px] font-black px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100 uppercase tracking-tighter animate-pulse shadow-sm">Okunmadı</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                )
+                            })
                         )}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    );
+}
+
+
+function HtmlEditor({ value, onChange, placeholder = "İçerik..." }) {
+    const editorRef = useRef(null);
+
+    useEffect(() => {
+        if (editorRef.current && editorRef.current.innerHTML !== value) {
+            editorRef.current.innerHTML = value || '';
+        }
+    }, [value]);
+
+    const handleCommand = (command, val = null) => {
+        document.execCommand(command, false, val);
+        if (editorRef.current) {
+            onChange(editorRef.current.innerHTML);
+        }
+    };
+
+    return (
+        <div className="space-y-1">
+            <div className="flex bg-slate-50 border border-slate-200 border-b-0 rounded-t-xl p-1.5 gap-1 shadow-sm">
+                <button type="button" onClick={() => handleCommand('bold')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black transition-all active:scale-90" title="Kalın">B</button>
+                <button type="button" onClick={() => handleCommand('italic')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black italic transition-all active:scale-90" title="İtalik">I</button>
+                <button type="button" onClick={() => handleCommand('underline')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black underline transition-all active:scale-90" title="Altı Çizili">U</button>
+                <div className="w-px h-5 bg-slate-200 mx-1 self-center"></div>
+                <button type="button" onClick={() => handleCommand('insertUnorderedList')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black transition-all active:scale-90" title="Liste">• List</button>
+                <button type="button" onClick={() => handleCommand('formatBlock', '<h3>')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black transition-all active:scale-90" title="Başlık">H</button>
+                <button type="button" onClick={() => handleCommand('removeFormat')} className="p-1.5 px-3 hover:bg-white hover:shadow-sm rounded-lg text-[10px] font-black transition-all active:scale-90 opacity-50" title="Formatı Temizle">✕</button>
+            </div>
+            <div
+                ref={editorRef}
+                contentEditable
+                onInput={(e) => onChange(e.currentTarget.innerHTML)}
+                onBlur={(e) => onChange(e.currentTarget.innerHTML)}
+                className="w-full bg-white border border-slate-200 rounded-b-xl px-4 py-3 text-[13px] font-medium min-h-[120px] outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 transition-all prose prose-sm max-w-none"
+            />
+        </div>
+    );
+}
+
+function NewsTab({ news, onDelete, onToggleActive, onRefresh }) {
+    const [loading, setLoading] = useState(false);
+    const [showPassive, setShowPassive] = useState(true);
+    const [editingId, setEditingId] = useState(null);
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    // Form fields for new news
+    const [formData, setFormData] = useState({
+        type: 'popup',
+        title: '',
+        desc: '',
+        badge: '',
+        badgeColor: 'bg-orange-100 text-orange-600 border-orange-200',
+        emoji: '🐾',
+        image: '',
+        buttons: [
+            { id: 1, text: 'Anladım', type: 'link', value: '/' },
+            { id: 2, text: 'Belki Sonra', type: 'link', value: '' }
+        ],
+        ctaColor: 'bg-orange-500 hover:bg-orange-400 shadow-orange-500/30',
+        accentColor: 'from-orange-50 to-amber-50',
+        isActive: true
+    });
+
+    const resetForm = () => {
+        setEditingId(null);
+        setFormData({
+            type: 'popup',
+            title: '',
+            desc: '',
+            badge: '',
+            badgeColor: 'bg-orange-100 text-orange-600 border-orange-200',
+            emoji: '🐾',
+            image: '',
+            buttons: [
+                { id: 1, text: 'Anladım', type: 'link', value: '/' },
+                { id: 2, text: 'Belki Sonra', type: 'link', value: '' }
+            ],
+            ctaColor: 'bg-orange-500 hover:bg-orange-400 shadow-orange-500/30',
+            accentColor: 'from-orange-50 to-amber-50',
+            isActive: true
+        });
+    };
+
+    function handleEdit(n) {
+        setEditingId(n.id);
+        setFormData({
+            type: n.type || 'popup',
+            title: n.title || '',
+            desc: n.desc || '',
+            badge: n.badge || '',
+            badgeColor: n.badgeColor || 'bg-orange-100 text-orange-600 border-orange-200',
+            emoji: n.emoji || '🐾',
+            image: n.image || '',
+            buttons: n.buttons || [
+                { id: 1, text: 'Anladım', type: 'link', value: '/' },
+                { id: 2, text: 'Belki Sonra', type: 'link', value: '' }
+            ],
+            ctaColor: n.ctaColor || 'bg-orange-500 hover:bg-orange-400 shadow-orange-500/30',
+            accentColor: n.accentColor || 'from-orange-50 to-amber-50',
+            isActive: n.isActive !== false,
+            ctaHref: n.ctaHref || '',
+            ctaText: n.ctaText || ''
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function handleAiFormat() {
+        if (!formData.desc.trim() || isAiLoading) return;
+        setIsAiLoading(true);
+        const tid = toast.loading('PatiAI metni güzelleştiriyor...');
+        try {
+            const res = await fetch('/api/ai/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    task: 'format-news-html',
+                    data: { input: formData.desc }
+                })
+            });
+            const result = await res.json();
+            const aiHtml = result.choices?.[0]?.message?.content;
+            if (aiHtml) {
+                setFormData(prev => ({ ...prev, desc: aiHtml }));
+                toast.success('Metin başarıyla optimize edildi! ✨', { id: tid });
+            } else {
+                toast.error('AI yanıtı alınamadı.', { id: tid });
+            }
+        } catch (e) {
+            toast.error('AI servisi şu an meşgul.', { id: tid });
+        } finally {
+            setIsAiLoading(false);
+        }
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            if (editingId) {
+                await updateNews(editingId, {
+                    ...formData,
+                    decorEmoji: formData.type === 'popup' ? ['🐾', '🎀', '🐱', '🦴'] : []
+                });
+                toast.success('Duyuru güncellendi');
+            } else {
+                await createNews({
+                    ...formData,
+                    id: 'news_' + Date.now(),
+                    decorEmoji: formData.type === 'popup' ? ['🐾', '🎀', '🐱', '🦴'] : []
+                });
+                toast.success('Duyuru oluşturuldu');
+            }
+            resetForm();
+            if (onRefresh) onRefresh();
+        } catch (e) {
+            toast.error('Hata oluştu');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <span className="w-2 h-8 bg-orange-500 rounded-full"></span>
+                    Duyuru Yönetimi
+                </h2>
+                <button
+                    onClick={() => setShowPassive(!showPassive)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${showPassive ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-orange-600 text-white border-orange-500 shadow-lg shadow-orange-500/20'
+                        }`}
+                >
+                    {showPassive ? 'Pasifleri Gizle' : 'Tümünü Göster'}
+                </button>
+            </div>
+
+            {/* Create/Edit News Form */}
+            <div className={`border rounded-2xl p-6 mb-8 transition-all ${editingId ? 'bg-indigo-50/50 border-indigo-200' : 'bg-orange-50/50 border-orange-100'}`}>
+                <h3 className={`font-bold mb-4 text-xs uppercase tracking-widest ${editingId ? 'text-indigo-900' : 'text-orange-900'}`}>
+                    {editingId ? 'Duyuruyu Düzenle' : 'Yeni Duyuru Ekle'}
+                </h3>
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Tür</label>
+                        <select
+                            value={formData.type}
+                            onChange={e => setFormData({ ...formData, type: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                        >
+                            <option value="popup">Popup (Ekranda Çıkar)</option>
+                            <option value="general">General (Yazı Altı)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Başlık</label>
+                        <input
+                            value={formData.title}
+                            onChange={e => setFormData({ ...formData, title: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                            placeholder="Örn: İlk Mama Hediyesi!" required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Badge (Rozet)</label>
+                        <input
+                            value={formData.badge}
+                            onChange={e => setFormData({ ...formData, badge: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                            placeholder="Örn: Sahiplenicilere Özel"
+                        />
+                    </div>
+                    <div className="md:col-span-3">
+                        <div className="flex justify-between items-end mb-1">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase">Açıklama (HTML Editor)</label>
+                            <button
+                                type="button"
+                                onClick={handleAiFormat}
+                                disabled={isAiLoading || !formData.desc.trim()}
+                                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                            >
+                                {isAiLoading ? 'Hazırlanıyor...' : '✨ PatiAI ile Güzelleştir'}
+                            </button>
+                        </div>
+                        <HtmlEditor
+                            value={formData.desc}
+                            onChange={(val) => setFormData({ ...formData, desc: val })}
+                            placeholder="Duyuru metni buraya... (Kalın, italik ve listeler kullanabilirsiniz)"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Emoji / Görsel URL</label>
+                        <div className="flex gap-2">
+                            <input
+                                value={formData.emoji}
+                                onChange={e => setFormData({ ...formData, emoji: e.target.value })}
+                                className="w-12 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-center"
+                                placeholder="🐾"
+                            />
+                            <input
+                                value={formData.image}
+                                onChange={e => setFormData({ ...formData, image: e.target.value })}
+                                className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                                placeholder="Görsel URL (Opsiyonel)"
+                            />
+                        </div>
+                    </div>
+                    {formData.type === 'popup' && (
+                        <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/50 p-4 rounded-xl border border-orange-100 italic">
+                            {formData.buttons.map((btn, idx) => (
+                                <div key={btn.id} className="space-y-2">
+                                    <label className="block text-[10px] font-black text-orange-700 uppercase">Buton {idx + 1}</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={btn.text}
+                                            onChange={e => {
+                                                const newBtns = [...formData.buttons];
+                                                newBtns[idx].text = e.target.value;
+                                                setFormData({ ...formData, buttons: newBtns });
+                                            }}
+                                            className="w-1/3 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                                            placeholder="Metin"
+                                        />
+                                        <select
+                                            value={btn.type}
+                                            onChange={e => {
+                                                const newBtns = [...formData.buttons];
+                                                newBtns[idx].type = e.target.value;
+                                                setFormData({ ...formData, buttons: newBtns });
+                                            }}
+                                            className="w-1/3 bg-white border border-slate-200 rounded-lg px-2 py-2 text-xs font-bold"
+                                        >
+                                            <option value="link">Linke Git</option>
+                                            <option value="action">Öneri/Mesaj Gönder</option>
+                                        </select>
+                                        <input
+                                            value={btn.value}
+                                            onChange={e => {
+                                                const newBtns = [...formData.buttons];
+                                                newBtns[idx].value = e.target.value;
+                                                setFormData({ ...formData, buttons: newBtns });
+                                            }}
+                                            className="w-1/3 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                                            placeholder="Link/Değer"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {formData.type === 'general' && (
+                        <div className="md:col-span-1">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Banner Linki (Opsiyonel)</label>
+                            <input
+                                value={formData.ctaHref}
+                                onChange={e => setFormData({ ...formData, ctaHref: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold"
+                                placeholder="/link"
+                            />
+                        </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                        <button type="submit" disabled={loading} className={`flex-1 text-white font-black text-[10px] uppercase py-3 rounded-lg tracking-widest transition-all ${editingId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-orange-600 hover:bg-orange-500'}`}>
+                            {loading ? 'İşleniyor...' : (editingId ? 'DEĞİŞİKLİKLERİ KAYDET' : 'DUYURU YAYINLA')}
+                        </button>
+                        {editingId && (
+                            <button
+                                type="button"
+                                onClick={resetForm}
+                                className="px-4 py-3 bg-slate-200 text-slate-600 font-black text-[10px] uppercase rounded-lg hover:bg-slate-300 transition-all"
+                            >
+                                İPTAL
+                            </button>
+                        )}
+                    </div>
+                </form>
+            </div>
+
+            {/* News List */}
+            <div className="overflow-x-auto">
+                <table className="w-full">
+                    <thead>
+                        <tr className="border-b border-slate-100 italic">
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Tür</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Başlık / Açıklama</th>
+                            <th className="text-left py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">CTA / Link</th>
+                            <th className="text-right py-4 px-4 text-slate-400 font-bold uppercase tracking-widest text-[10px]">Aksiyon</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {news
+                            .filter(n => showPassive || n.isActive !== false)
+                            .map(n => (
+                                <NewsRow key={n.id} n={n} onDelete={onDelete} onToggleActive={onToggleActive} onEdit={() => handleEdit(n)} />
+                            ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function NewsRow({ n, onDelete, onToggleActive, onEdit }) {
+    return (
+        <tr className="hover:bg-slate-50 transition-colors">
+            <td className="py-4 px-4">
+                <span className={`text-[9px] font-black px-2 py-1 rounded-[4px] uppercase tracking-wider ${n.type === 'popup' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {n.type === 'popup' ? 'POPUP' : 'GENEL'}
+                </span>
+            </td>
+            <td className="py-4 px-4">
+                <div className="text-xs font-black text-slate-900">{n.title}</div>
+                <div className="text-[10px] text-slate-500 line-clamp-1">{n.desc}</div>
+            </td>
+            <td className="py-4 px-4">
+                {n.type === 'popup' ? (
+                    <div className="flex flex-col gap-1">
+                        {n.buttons?.map((b, i) => (
+                            <div key={i} className="text-[9px] flex items-center gap-1">
+                                <span className="font-black text-slate-700">{b.text}:</span>
+                                <span className={`px-1 rounded ${b.type === 'link' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'}`}>
+                                    {b.type === 'link' ? 'Link' : 'Öneri'}
+                                </span>
+                                <span className="text-slate-400 truncate max-w-[80px]">{b.value || '-'}</span>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <>
+                        <div className="text-[10px] font-bold text-slate-700">{n.ctaText || '-'}</div>
+                        <div className="text-[9px] text-indigo-500 font-mono">{n.ctaHref || 'Link yok'}</div>
+                    </>
+                )}
+            </td>
+            <td className="py-4 px-4 text-right flex items-center justify-end gap-2">
+                <button
+                    onClick={onEdit}
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
+                    title="Düzenle"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </button>
+                <button
+                    onClick={() => onToggleActive(n.id, n.isActive !== false)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${n.isActive !== false ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}
+                >
+                    {n.isActive !== false ? 'AKTİF' : 'PASİF'}
+                </button>
+                <button onClick={() => onDelete(n.id)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors" title="Sil">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            </td>
+        </tr>
+    );
+}
+
+function WebmasterTab({ users, listings, visitors, news, posts }) {
+    const [messages, setMessages] = useState([
+        { role: 'assistant', content: 'Merhaba Sayın Yönetici! Ben EldenEle Webmaster AI. 🛠️\n\nSEO uyumlu duyuru hazırlama, ziyaretçi trafiğini analiz etme veya platform verilerinden rapor çıkarma konusunda sana yardım etmeye hazırım. Ne yapmamı istersin? (Örn: "Sevimli bir sahiplendirme duyurusu oluştur" veya "Ziyaretçi verilerini analiz et")' }
+    ]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const scrollRef = useRef(null);
+
+    useEffect(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, isLoading]);
+
+    async function handleChat(e) {
+        e.preventDefault();
+        if (!input.trim() || isLoading) return;
+
+        const userMsg = { role: 'user', content: input };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setIsLoading(true);
+
+        try {
+            const res = await fetch('/api/ai/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    task: 'admin-webmaster',
+                    data: {
+                        context: {
+                            question: input,
+                            stats: {
+                                totalUsers: users.length,
+                                totalListings: listings.length,
+                                totalVisitors: visitors.length,
+                                totalNews: news.length,
+                                totalPosts: posts.length
+                            },
+                            recentListings: listings.slice(0, 5).map(l => ({ title: l.title, city: l.city })),
+                            recentVisitors: visitors.slice(0, 10).map(v => ({ path: v.path, platform: v.platform }))
+                        }
+                    }
+                })
+            });
+
+            const data = await res.json();
+            const aiContent = data.choices?.[0]?.message?.content || "Analiz sırasında bir sorun oluştu.";
+            setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
+        } catch (err) {
+            toast.error("Webmaster asistanı şu an yanıt veremiyor.");
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+        <div className="p-8 h-[700px] flex flex-col">
+            <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <span className="w-2 h-8 bg-slate-900 rounded-full"></span>
+                Webmaster & SEO Strateji Üssü
+            </h2>
+
+            <div className="flex-1 bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden flex flex-col shadow-2xl relative">
+                <div className="bg-slate-900 border-b border-white/5 px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">EldenEle SEO/Webmaster Engine 2.0</span>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+                    {messages.map((m, i) => (
+                        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] rounded-2xl p-4 text-[13px] leading-relaxed shadow-sm ${m.role === 'user'
+                                ? 'bg-indigo-600 text-white font-medium'
+                                : 'bg-slate-900 border border-slate-800 text-slate-200'
+                                }`}>
+                                <pre className="whitespace-pre-wrap font-sans">{m.content}</pre>
+                            </div>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="flex justify-start">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex gap-2">
+                                <span className="w-2 h-2 bg-slate-700 rounded-full animate-bounce"></span>
+                                <span className="w-2 h-2 bg-slate-700 rounded-full animate-bounce [animation-delay:-.3s]"></span>
+                                <span className="w-2 h-2 bg-slate-700 rounded-full animate-bounce [animation-delay:-.5s]"></span>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={scrollRef} />
+                </div>
+
+                <div className="p-4 bg-slate-900 border-t border-white/5">
+                    <form onSubmit={handleChat} className="flex gap-3">
+                        <input
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="SEO raporu oluştur, duyuru hazırla veya verileri analiz et..."
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-600"
+                        />
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-50"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     );

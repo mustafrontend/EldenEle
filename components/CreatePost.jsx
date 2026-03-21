@@ -38,7 +38,8 @@ export default function CreatePost() {
                 type,
                 photoFiles: photoFile ? [photoFile] : [],
                 userIsFeatured: userData?.isFeatured || false,
-                isAdminPost: isAdminPost
+                isAdminPost: isAdminPost,
+                userBadges: userData?.badges || []
             });
             setContent('');
             setPhotoFile(null);

@@ -1,6 +1,6 @@
 export const metadata = {
     title: 'Profilim',
-    description: 'EldenEle.app profil sayfanız. İlanlarınızı, favorilerinizi ve mesajlarınızı yönetin.',
+    description: 'EldenEle.pet profil sayfanız. İlanlarınızı, favorilerinizi ve mesajlarınızı yönetin.',
     robots: { index: false, follow: false },
 };
 

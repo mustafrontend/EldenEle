@@ -18,7 +18,7 @@ function getCategoriesForConcept(concept) {
         case 'otel': return ['Tümü', 'Otel', 'Bakıcı', 'Geçici Yuva', 'Pansiyon', 'Eğitim / Okul'];
         case 'gezdirme': return ['Tümü', 'Köpek Gezdirme', 'Düzenli Gezdirme', 'Haftalık Yürüyüş'];
         case 'transfer': return ['Tümü', 'Şehir İçi Transfer', 'Şehirler Arası Nakil', 'Havayolu Pet Taşıma', 'VİP Pet Taksi'];
-        case 'kan-bagisi': return ['Tümü', 'Acil Kan Arayışı', 'Kan Donörü Olabilir', 'İlaç/Serum Desteği'];
+        case 'aksesuar-mama': return ['Tümü', 'Mama', 'Aksesuar', 'Tasma / Gezdirme', 'Yatak / Yuva', 'Oyuncak', 'Bakım Ürünleri', 'Diğer'];
         case 'bedelsiz': return bedelsizCategories;
         default: return takasCategories;
     }
@@ -33,7 +33,7 @@ function getConceptClasses(concept, activeConcept) {
         if (concept === 'gezdirme') return 'bg-white shadow-sm text-amber-600 font-black border-amber-500/30 border';
         if (concept === 'kayip') return 'bg-white shadow-sm text-red-600 font-black border-red-500/30 border';
         if (concept === 'transfer') return 'bg-white shadow-sm text-cyan-600 font-black border-cyan-500/30 border';
-        if (concept === 'kan-bagisi') return 'bg-white shadow-sm text-red-700 font-black border-red-700/30 border';
+        if (concept === 'aksesuar-mama') return 'bg-white shadow-sm text-blue-600 font-black border-blue-500/30 border';
         if (concept === 'bedelsiz') return 'bg-white shadow-sm text-emerald-600 font-black border-emerald-500/30 border';
         return 'bg-white shadow-sm text-slate-900 font-black border border-slate-300';
     }
@@ -49,7 +49,7 @@ function getCategoryClasses(isActive, concept) {
         if (concept === 'gezdirme') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-500/50 hover:text-amber-500';
         if (concept === 'kayip') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-red-500/50 hover:text-red-500';
         if (concept === 'transfer') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-cyan-500/50 hover:text-cyan-500';
-        if (concept === 'kan-bagisi') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-red-700/50 hover:text-red-700';
+        if (concept === 'aksesuar-mama') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-blue-500/50 hover:text-blue-500';
         if (concept === 'bedelsiz') return 'bg-slate-50 border-slate-200 text-slate-500 hover:border-emerald-500/50 hover:text-emerald-500';
         return 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700';
     }
@@ -60,7 +60,7 @@ function getCategoryClasses(isActive, concept) {
     if (concept === 'gezdirme') return 'bg-amber-50 border-amber-200 text-amber-600';
     if (concept === 'kayip') return 'bg-red-50 border-red-200 text-red-600';
     if (concept === 'transfer') return 'bg-cyan-50 border-cyan-200 text-cyan-600';
-    if (concept === 'kan-bagisi') return 'bg-red-50 border-red-200 text-red-700';
+    if (concept === 'aksesuar-mama') return 'bg-blue-50 border-blue-200 text-blue-600';
     if (concept === 'bedelsiz') return 'bg-emerald-50 border-emerald-200 text-emerald-600';
     return 'bg-slate-100 text-indigo-700 border-slate-300 shadow-sm';
 }
@@ -71,18 +71,20 @@ export default function FilterBar({ filters, onFilterChange }) {
     const [city, setCity] = useState(filters?.city || '');
     const [district, setDistrict] = useState(filters?.district || '');
     const [category, setCategory] = useState(filters?.category || '');
+    const [breed, setBreed] = useState(filters?.breed || '');
 
     const availableIlceler = useMemo(() => city ? ['Tümü', ...getIlceler(city)] : [], [city]);
     const currentCategories = useMemo(() => getCategoriesForConcept(concept), [concept]);
 
     // Emit filter changes
     useEffect(() => {
-        onFilterChange({ concept, city, district, category });
-    }, [concept, city, district, category]);
+        onFilterChange({ concept, city, district, category, breed });
+    }, [concept, city, district, category, breed]);
 
     function handleConceptChange(c) {
         setConcept(c);
         setCategory('');
+        setBreed('');
     }
 
     function handleCityChange(c) {
@@ -131,9 +133,8 @@ export default function FilterBar({ filters, onFilterChange }) {
                             { key: 'gezdirme', label: '🦮 Gezdirme' },
                             { key: 'kayip', label: '🚨 Kayıp/Bul' },
                             { key: 'transfer', label: '🚕 Nakil' },
-                            { key: 'kan-bagisi', label: '🩸 Kan Bağışı' },
+                            { key: 'aksesuar-mama', label: '🛍️ Aksesuar & Mama' },
                             { key: '', label: 'Hepsi' },
-                            { key: 'takas', label: 'Pati Takas' },
                             { key: 'bedelsiz', label: 'Destek/Hediye' },
                         ].map(({ key, label }) => (
                             <button
@@ -181,7 +182,7 @@ export default function FilterBar({ filters, onFilterChange }) {
                             return (
                                 <button
                                     key={cat}
-                                    onClick={() => setCategory(cat === 'Tümü' ? '' : cat)}
+                                    onClick={() => { setCategory(cat === 'Tümü' ? '' : cat); setBreed(''); }}
                                     className={`${getCategoryClasses(isActive, concept)} px-4 py-2 border rounded-lg text-xs font-bold transition-all whitespace-nowrap flex-grow sm:flex-grow-0`}
                                 >
                                     {cat}
@@ -189,6 +190,34 @@ export default function FilterBar({ filters, onFilterChange }) {
                             );
                         })}
                     </div>
+
+                    {/* Breed Selector - Multi-line Wrap (No Scroll) */}
+                    {(category === 'Kedi' || category === 'Köpek') && (
+                        <div className="w-full mt-2 pt-3 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex items-center mb-2 px-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    {category === 'Kedi' ? 'KEDİ CİNSLERİ' : 'KÖPEK IRKLARI'}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                <button
+                                    onClick={() => setBreed('')}
+                                    className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap border ${breed === '' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+                                >
+                                    HEPSİ
+                                </button>
+                                {petCategories.find(c => c.name === category)?.popularBreeds.map(b => (
+                                    <button
+                                        key={b}
+                                        onClick={() => setBreed(breed === b ? '' : b)}
+                                        className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black transition-all whitespace-nowrap border ${breed === b ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+                                    >
+                                        {b.toUpperCase()}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

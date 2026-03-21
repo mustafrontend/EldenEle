@@ -42,7 +42,7 @@ export async function GET(request) {
     const q = query(collection(serverDb, 'listings'), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
 
-    const data = snap.docs
+    const activeListings = snap.docs
         .map((d) => {
             const raw = d.data();
             return {
@@ -58,6 +58,19 @@ export async function GET(request) {
             };
         })
         .filter((l) => l.status === 'active' || !l.status);
+
+    // İlgili kullanıcının toplam aktif ilan sayısını hesapla
+    const userCounts = {};
+    activeListings.forEach(l => {
+        if (l.userId) {
+            userCounts[l.userId] = (userCounts[l.userId] || 0) + 1;
+        }
+    });
+
+    const data = activeListings.map(l => ({
+        ...l,
+        userListingsCount: l.userId ? (userCounts[l.userId] || 0) : 0
+    }));
 
     _cache = { data, timestamp: now };
 

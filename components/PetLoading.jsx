@@ -31,16 +31,6 @@ export default function PetLoading({ message = "Pati izleri takip ediliyor..." }
                 </div>
             </div>
 
-            <style jsx>{`
-                @keyframes loading-bar {
-                    0% { transform: scaleX(0); }
-                    50% { transform: scaleX(0.7); }
-                    100% { transform: scaleX(1); }
-                }
-                .animate-loading-bar {
-                    animation: loading-bar 2s infinite ease-in-out;
-                }
-            `}</style>
         </div>
     );
 }

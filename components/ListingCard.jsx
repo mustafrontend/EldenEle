@@ -3,20 +3,27 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { generateListingSlug } from '../lib/seo';
+import UserBadge from './UserBadge';
 
 function getStyling(listing) {
     const c = listing.concept;
-    if (c === 'sahiplendirme') return { label: '🐾 Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
-    if (c === 'sahiplenmek-istiyorum') return { label: '🏠 Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
-    if (c === 'ciftlestirme') return { label: '💑 Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
-    if (c === 'otel') return { label: '🏨 Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: 'OTEL' };
-    if (c === 'gezdirme') return { label: '🦮 Pati Gezdirme', badge: 'bg-amber-50 text-amber-600 border-amber-200', hover: 'hover:border-amber-200', textHover: 'group-hover:text-amber-500', val: 'GEZDİRME' };
-    if (c === 'kayip') return { label: '🚨 Kayıp / Bulunan', badge: 'bg-red-50 text-red-600 border-red-200', hover: 'hover:border-red-200', textHover: 'group-hover:text-red-600', val: 'KAYIP' };
-    if (c === 'transfer') return { label: '🚕 Pati Transfer', badge: 'bg-cyan-50 text-cyan-600 border-cyan-200', hover: 'hover:border-cyan-200', textHover: 'group-hover:text-cyan-600', val: 'TRANSFER' };
-    if (c === 'kan-bagisi') return { label: '🩸 Kan Bağışı İhtiyacı', badge: 'bg-red-50 text-red-700 border-red-200 shadow-sm', hover: 'hover:border-red-300', textHover: 'group-hover:text-red-700', val: 'ACİL' };
-    if (c === 'bedelsiz') return { label: '🎁 Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
-    if (c === 'takas') return { label: '🔄 Pati Takas', badge: 'bg-blue-50 text-blue-600 border-blue-200', hover: 'hover:border-blue-200', textHover: 'group-hover:text-blue-500', val: 'TAKAS' };
-    return { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
+    let result;
+    if (c === 'sahiplendirme') result = { label: '🐾 Yuva Arıyor', badge: 'bg-orange-50/80 text-orange-600 border-orange-100/50', hover: 'hover:border-orange-500/20 hover:shadow-orange-500/5', textHover: 'group-hover:text-orange-600', val: 'ÜCRETSİZ' };
+    else if (c === 'sahiplenmek-istiyorum') result = { label: '🏠 Yuva Olmak İstiyor', badge: 'bg-rose-50/80 text-rose-600 border-rose-100/50', hover: 'hover:border-rose-500/20 hover:shadow-rose-500/5', textHover: 'group-hover:text-rose-600', val: 'ARANIYOR' };
+    else if (c === 'ciftlestirme') result = { label: '💑 Eş Yap / Çiftleştirme', badge: 'bg-purple-50 text-purple-600 border-purple-200', hover: 'hover:border-purple-200', textHover: 'group-hover:text-purple-500', val: 'EŞ BUL' };
+    else if (c === 'otel') result = { label: '🏨 Pati Oteli / Bakıcı', badge: 'bg-indigo-50 text-indigo-600 border-indigo-200', hover: 'hover:border-indigo-200', textHover: 'group-hover:text-indigo-500', val: 'OTEL' };
+    else if (c === 'gezdirme') result = { label: '🦮 Pati Gezdirme', badge: 'bg-amber-50 text-amber-600 border-amber-200', hover: 'hover:border-amber-200', textHover: 'group-hover:text-amber-500', val: 'GEZDİRME' };
+    else if (c === 'kayip') result = { label: '🚨 Kayıp / Bulunan', badge: 'bg-red-50 text-red-600 border-red-200', hover: 'hover:border-red-200', textHover: 'group-hover:text-red-600', val: 'KAYIP' };
+    else if (c === 'transfer') result = { label: '🚕 Pati Transfer', badge: 'bg-cyan-50 text-cyan-600 border-cyan-200', hover: 'hover:border-cyan-200', textHover: 'group-hover:text-cyan-600', val: 'TRANSFER' };
+    else if (c === 'aksesuar-mama') result = { label: '🛍️ Pati Market / Aksesuar', badge: 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm', hover: 'hover:border-blue-300', textHover: 'group-hover:text-blue-700', val: 'MARKET' };
+    else if (c === 'bedelsiz') result = { label: '🎁 Destek / Hediye', badge: 'bg-emerald-50 text-emerald-600 border-emerald-200', hover: 'hover:border-emerald-200', textHover: 'group-hover:text-emerald-500', val: 'ÜCRETSİZ' };
+    else result = { label: 'İlan', badge: 'bg-slate-50 text-slate-600 border-slate-200', hover: 'hover:border-slate-300', textHover: 'group-hover:text-slate-600', val: 'AKTİF' };
+
+    if (listing.userListingsCount > 2) {
+        result.val = 'GÖRÜŞÜLÜR';
+    }
+
+    return result;
 }
 
 
@@ -100,6 +107,7 @@ export default function ListingCard({ listing, isFavorite, onToggleFavorite, sho
                 <div className="p-4 flex flex-col flex-1">
                     <div className="flex items-center gap-2 mb-2">
                         <span className={`${styling.badge} text-[9px] font-black px-2 py-0.5 rounded-md border tracking-widest uppercase`}>{styling.label}</span>
+                        {listing.userBadges && listing.userBadges.length > 0 && <UserBadge badges={listing.userBadges} />}
                     </div>
                     <h3 className={`${styling.textHover} font-black text-slate-900 text-[15px] leading-tight line-clamp-2 mb-2 transition-colors tracking-tight`}>{listing.title}</h3>
 
@@ -172,8 +180,9 @@ export default function ListingCard({ listing, isFavorite, onToggleFavorite, sho
                 <div className="flex flex-col justify-between py-1 flex-1 min-w-0">
                     <div>
                         <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={`${styling.badge} text-[8px] font-black px-1.5 py-0.5 rounded border tracking-widest uppercase`}>{styling.label}</span>
+                                {listing.userBadges && listing.userBadges.length > 0 && <UserBadge badges={listing.userBadges} />}
                                 {listing.breed && (
                                     <span className="text-[8px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-bold truncate max-w-[80px]">{listing.breed}</span>
                                 )}

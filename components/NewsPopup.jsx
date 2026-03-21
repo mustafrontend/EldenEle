@@ -2,67 +2,77 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/AuthContext';
-
-// ---------------------------------------------------------------
-// Dinamik Haber / Duyuru Listesi
-// Yeni bir haber eklemek için buraya yeni bir obje (farklı 'id'
-// ile) eklemeniz yeterlidir. Kullanıcı "Bir daha gösterme"
-// dediğinde o haber localStorage'a yazılır ve bir daha açılmaz.
-// ---------------------------------------------------------------
-const NEWS_LIST = [
-    {
-        id: 'ilk_mama_hediyesi_mart2026',
-        type: 'sahiplendirme', // 'sahiplendirme' | 'general'
-        badge: '🐾 Sahiplenicilere Özel',
-        badgeColor: 'bg-orange-100 text-orange-600 border-orange-200',
-        title: 'İlk Mama Hediyesi Bizden! 🎁',
-        desc: 'Platformumuzdan sahiplenme yapan tüm ailelere, sevimli arkadaşınızın yeni hayatına güzel bir başlangıç olsun diye ilk mama hediyesini biz veriyoruz! Sahiplenme ilanına tıklayın, haber konuşun ve hediyenizi talep edin.',
-        emoji: '🐶',
-        image: null, // Emoji kullanılacağı için null
-        ctaText: 'İlanları İncele',
-        ctaHref: '/',
-        ctaColor: 'bg-orange-500 hover:bg-orange-400 shadow-orange-500/30',
-        accentColor: 'from-orange-50 to-amber-50',
-        decorEmoji: ['🐾', '🎀', '🐱', '🦴'],
-    },
-    {
-        id: 'protein_cekilisi_mart12',
-        type: 'general',
-        badge: 'Topluluk Duyurusu',
-        badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-        title: 'Açılışa Özel Dev Çekiliş!',
-        desc: 'Açılışımıza özel, üye olan kullanıcılarımız arasından 5 şanslı kişiye Whey Protein Tozu (1000 gr) hediye ediyoruz! Çekiliş sonucu 12 Mart\'ta canlı yayında açıklanacaktır.',
-        emoji: '🏆',
-        image: 'https://supplementler2.sm.mncdn.com/Assets/Supplementler/Thumbs/supplementlercom_whey_protein_1000_gr_90889.jpeg',
-        ctaText: 'Harika, Anladım!',
-        ctaHref: null,
-        ctaColor: 'bg-slate-900 hover:bg-slate-800 shadow-slate-900/20',
-        accentColor: 'from-slate-50 to-indigo-50',
-        decorEmoji: [],
-    },
-];
+import { getAllNews, sendMessage } from '../lib/listingService';
+import { toast } from 'react-hot-toast';
 
 export default function NewsPopup() {
-    const { user } = useAuth();
+    const { user, updateUserInfo } = useAuth();
+    const router = useRouter();
     const [currentNews, setCurrentNews] = useState(null);
     const [dontShowAgain, setDontShowAgain] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
 
     useEffect(() => {
-        // Client (Tarayıcı) tarafında çalışır.
-        // Dismiss edilmemiş ilk haberi bulur (listede en üstteki öncelikli).
-        const activeNews = NEWS_LIST.find(news => {
-            const dismissed = localStorage.getItem(`news_dismissed_${news.id}`);
-            return !dismissed;
-        });
+        async function fetchNews() {
+            try {
+                const newsList = await getAllNews();
+                // 'popup' tipinde olan duyuruları filtrele
+                const activeNews = newsList
+                    .filter(n => n.type === 'popup' && n.isActive !== false)
+                    .find(n => {
+                        const dismissed = localStorage.getItem(`news_dismissed_${n.id}`);
+                        return !dismissed;
+                    });
 
-        if (activeNews) {
-            setCurrentNews(activeNews);
-            const timer = setTimeout(() => setIsVisible(true), 1500);
-            return () => clearTimeout(timer);
+                if (activeNews) {
+                    setCurrentNews(activeNews);
+                    const timer = setTimeout(() => setIsVisible(true), 2500);
+                    return () => clearTimeout(timer);
+                }
+            } catch (error) {
+                console.error("Popup fetch error:", error);
+            }
         }
+        fetchNews();
     }, []);
+
+    const handleAction = async (btn) => {
+        // Bir kez aksiyon alınırsa (linke gitme veya oylama), bu duyuruyu bir daha gösterme
+        if (currentNews) {
+            localStorage.setItem(`news_dismissed_${currentNews.id}`, 'true');
+        }
+
+        if (!btn.value && btn.type === 'link') {
+            handleClose();
+            return;
+        }
+
+        if (btn.type === 'link') {
+            router.push(btn.value);
+            handleClose();
+        } else if (btn.type === 'action') {
+            try {
+                if (user) {
+                    await updateUserInfo({ recommendationValue: btn.value || btn.text });
+
+                    // Send message to admin as a suggestion
+                    await sendMessage({
+                        listingId: 'SUGGESTION',
+                        receiverId: 'admin',
+                        text: `Öneri: ${btn.text} (${btn.value || 'Değer yok'})`
+                    });
+                }
+                localStorage.setItem('user_recommendation_value', btn.value || btn.text);
+                toast.success('Öneriniz mesaj olarak iletildi.');
+            } catch (e) {
+                console.error(e);
+                toast.error('Mesaj gönderilemedi.');
+            }
+            handleClose();
+        }
+    };
 
     const handleClose = () => {
         if (dontShowAgain && currentNews) {
@@ -74,7 +84,7 @@ export default function NewsPopup() {
 
     if (!currentNews) return null;
 
-    const isSahiplendirme = currentNews.type === 'sahiplendirme';
+    const hasDecor = currentNews.decorEmoji && currentNews.decorEmoji.length > 0;
 
     return (
         <div className="relative z-[9999]">
@@ -86,7 +96,7 @@ export default function NewsPopup() {
 
             {/* Popup */}
             <div
-                className={`fixed top-1/2 left-1/2 -translate-x-1/2 w-[92%] max-w-sm rounded-3xl shadow-[0_24px_80px_-10px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-all duration-500 bg-white ${isVisible ? 'opacity-100 scale-100 -translate-y-1/2' : 'opacity-0 scale-90 -translate-y-[45%] pointer-events-none'}`}
+                className={`fixed top-1/2 left-1/2 -translate-x-1/2 w-[92%] max-w-sm max-h-[90vh] rounded-3xl shadow-[0_24px_80px_-10px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col transition-all duration-500 bg-white ${isVisible ? 'opacity-100 scale-100 -translate-y-1/2' : 'opacity-0 scale-90 -translate-y-[45%] pointer-events-none'}`}
             >
                 {/* Kapat Butonu */}
                 <button
@@ -99,8 +109,8 @@ export default function NewsPopup() {
                     </svg>
                 </button>
 
-                {/* ---- SAHİPLENDİRME tipi header ---- */}
-                {isSahiplendirme ? (
+                {/* Header Alanı */}
+                {hasDecor ? (
                     <div className={`relative w-full pt-10 pb-6 px-6 bg-gradient-to-br ${currentNews.accentColor} overflow-hidden`}>
                         {/* Dekor emojiler - arka plan */}
                         {currentNews.decorEmoji.map((em, i) => (
@@ -151,50 +161,53 @@ export default function NewsPopup() {
                 )}
 
                 {/* İçerik alanı */}
-                <div className="p-6 text-center">
+                <div className="p-6">
                     {/* Badge */}
                     <div className={`inline-flex items-center gap-1.5 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider mb-3 shadow-sm border ${currentNews.badgeColor}`}>
                         {currentNews.badge}
                     </div>
 
                     {/* Başlık */}
-                    <h2 className="text-xl font-extrabold text-slate-900 mb-2.5 leading-tight tracking-tight">
+                    <h2 className="text-xl font-extrabold text-slate-900 mb-2.5 leading-tight tracking-tight text-center">
                         {currentNews.title}
                     </h2>
 
-                    {/* Açıklama */}
-                    <p className="text-slate-500 text-[13px] mb-6 leading-relaxed font-medium">
-                        {currentNews.desc}
-                    </p>
+                    {/* Açıklama - Kaydırılabilir Alan */}
+                    <div className="max-h-[35vh] overflow-y-auto pr-2 mb-6 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                        <div
+                            className="text-slate-500 text-[13px] leading-relaxed font-medium news-content"
+                            dangerouslySetInnerHTML={{ __html: currentNews.desc }}
+                        />
+                    </div>
 
                     {/* CTA Buton(lar) */}
-                    {currentNews.ctaHref ? (
-                        <div className="flex flex-col gap-2 mb-4">
-                            <Link
-                                href={currentNews.ctaHref}
-                                onClick={handleClose}
-                                className={`w-full ${currentNews.ctaColor} text-white font-bold py-3.5 rounded-xl text-[14px] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2`}
+                    <div className="flex flex-col gap-3 mb-5 px-4 sm:px-0">
+                        {currentNews.buttons && currentNews.buttons.map((btn, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => handleAction(btn)}
+                                className={`w-full py-4 rounded-2xl text-[14px] font-black tracking-tight transition-all active:scale-[0.97] active:opacity-90 flex items-center justify-center gap-2.5 shadow-xl ${idx === 0
+                                    ? (currentNews.ctaColor || 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-orange-500/30 border-b-2 border-orange-700/20')
+                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200/60 shadow-slate-200/20'
+                                    }`}
                             >
-                                {currentNews.ctaText}
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                </svg>
-                            </Link>
+                                <span className="uppercase tracking-widest text-[11px]">{btn.text}</span>
+                                {btn.type === 'link' && btn.value && (
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                )}
+                            </button>
+                        ))}
+                        {(!currentNews.buttons || currentNews.buttons.length === 0) && (
                             <button
                                 onClick={handleClose}
-                                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-[13px] transition-all active:scale-95"
+                                className={`w-full ${currentNews.ctaColor || 'bg-orange-500 text-white'} font-bold py-3.5 rounded-xl text-[14px] shadow-lg transition-all active:scale-95 mb-4`}
                             >
-                                Belki Sonra
+                                {currentNews.ctaText || 'Anladım'}
                             </button>
-                        </div>
-                    ) : (
-                        <button
-                            onClick={handleClose}
-                            className={`w-full ${currentNews.ctaColor} text-white font-bold py-3.5 rounded-xl text-[14px] shadow-lg transition-all active:scale-95 mb-4`}
-                        >
-                            {currentNews.ctaText}
-                        </button>
-                    )}
+                        )}
+                    </div>
 
                     {/* "Bir daha gösterme" checkbox */}
                     <div className="flex justify-center w-full">

@@ -6,6 +6,8 @@ import BotSimulator from "../components/BotSimulator";
 import LiveNotifications from "../components/LiveNotifications";
 import FeedbackButton from "../components/FeedbackButton";
 import VisitorTracker from "../components/VisitorTracker";
+import { Toaster } from "react-hot-toast";
+import AIAssistant from "../components/AIAssistant";
 
 export const metadata = {
     metadataBase: new URL(SITE_URL),
@@ -69,6 +71,13 @@ export const metadata = {
     category: "marketplace",
 };
 
+export const viewport = {
+    themeColor: "#1e293b",
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+};
+
 export default function RootLayout({ children }) {
     const orgJsonLd = generateOrganizationJsonLd();
     const webSiteJsonLd = generateWebSiteJsonLd();
@@ -79,7 +88,6 @@ export default function RootLayout({ children }) {
                 <link rel="icon" href="/favicon.ico" sizes="any" />
                 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
                 <link rel="manifest" href="/manifest.json" />
-                <meta name="theme-color" content="#1e293b" />
                 <meta name="mobile-web-app-capable" content="yes" />
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -97,10 +105,12 @@ export default function RootLayout({ children }) {
             <body className="antialiased">
                 <AuthProvider>
                     <ProgressBarProvider>
+                        <Toaster position="top-right" />
                         <BotSimulator />
                         <LiveNotifications />
                         <FeedbackButton />
                         <VisitorTracker />
+                        <AIAssistant />
                         {children}
                     </ProgressBarProvider>
                 </AuthProvider>

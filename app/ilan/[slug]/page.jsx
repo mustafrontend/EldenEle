@@ -42,7 +42,7 @@ export async function generateMetadata({ params }) {
     if (!listing) {
         return {
             title: 'İlan Bulunamadı',
-            description: 'Aradığınız ilan EldenEle.app üzerinde bulunamadı.',
+            description: 'Aradığınız ilan EldenEle.pet üzerinde bulunamadı.',
             robots: { index: false, follow: true },
         };
     }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import AppHeader from '../components/AppHeader';
 import FilterBar from '../components/FilterBar';
 import ListingCard from '../components/ListingCard';
@@ -13,8 +13,13 @@ import { useAuth } from '../lib/AuthContext';
 import NewUsersTracker from '../components/NewUsersTracker';
 import NewPostsTracker from '../components/NewPostsTracker';
 import dynamic from 'next/dynamic';
+import { generateItemListJsonLd } from '../lib/seo';
 import { getCommunityStats } from '../lib/communityService';
 import NewsPopup from '../components/NewsPopup';
+import PatiBackground from '../components/PatiBackground';
+import StoryBar from '../components/StoryBar';
+import DailyVisitsBanner from '../components/DailyVisitsBanner';
+import FriendFinder from '../components/FriendFinder';
 
 // Load Map without SSR to prevent window/document undefined crash
 const DynamicMapView = dynamic(() => import('../components/MapView'), { ssr: false });
@@ -74,6 +79,15 @@ function getBannerData(concept) {
             badges: ['Eş Bul', 'Çiftleştirme', 'Oyun Arkadaşı']
         };
     }
+    if (concept === 'aksesuar-mama') {
+        return {
+            iconColor: 'bg-blue-50/70 text-blue-500',
+            icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
+            title: 'Pati Aksesuarları & Sağlıklı Mamalar',
+            desc: 'Dostunuz için en kaliteli aksesuarları, konforlu yatakları ve taze mamaları keşfedin. İhtiyacınız olan her şey burada.',
+            badges: ['Kedi Maması', 'Köpek Tasması', 'Pati Yatağı']
+        };
+    }
     if (concept === 'otel') {
         return {
             iconColor: 'bg-indigo-50/70 text-indigo-500',
@@ -104,6 +118,7 @@ function getBannerData(concept) {
 
 function HomePageContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const initialTab = searchParams.get('tab') || 'ilanlar';
 
     const { user, userData, toggleFavorite } = useAuth();
@@ -111,7 +126,7 @@ function HomePageContent() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
-    const [filters, setFilters] = useState({ tab: initialTab, concept: '', city: '', district: '', category: '' });
+    const [filters, setFilters] = useState({ tab: initialTab, concept: '', city: '', district: '', category: '', breed: '' });
     const [stats, setStats] = useState({ users: 0, posts: 0 });
 
     const fetchListings = useCallback(async () => {
@@ -134,39 +149,99 @@ function HomePageContent() {
 
     const favorites = useMemo(() => userData?.favorites || [], [userData]);
 
-    const { featuredListings, regularListings } = useMemo(() => {
+    const { featuredListings, newArrivals, remainingListings } = useMemo(() => {
+        const queryLower = searchQuery.toLowerCase();
         const filtered = listings.filter(l => {
-            const matchQuery = l.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                l.description?.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchQuery = !queryLower || l.title?.toLowerCase().includes(queryLower) ||
+                l.description?.toLowerCase().includes(queryLower);
             const matchTab = filters.tab === 'ilanlar' || l.concept === filters.tab;
             const matchConcept = !filters.concept || l.concept === filters.concept;
             const matchCity = !filters.city || l.city === filters.city;
             const matchDistrict = !filters.district || l.district === filters.district;
             const matchCategory = !filters.category || l.category === filters.category;
-            return matchQuery && matchTab && matchConcept && matchCity && matchDistrict && matchCategory;
+            const matchBreed = !filters.breed || l.breed === filters.breed;
+            return matchQuery && matchTab && matchConcept && matchCity && matchDistrict && matchCategory && matchBreed;
         });
 
         const featured = filtered.filter(l => l.userIsFeatured).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         const regular = filtered.filter(l => !l.userIsFeatured).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-        return { featuredListings: featured, regularListings: regular };
+        const newArrivals = regular.slice(0, 4);
+        const remainingListings = regular.slice(4);
+
+        return { featuredListings: featured, newArrivals, remainingListings };
     }, [listings, searchQuery, filters]);
 
     const bannerData = useMemo(() => getBannerData(filters.concept), [filters.concept]);
 
     async function handleToggleFavorite(id) {
-        if (!user) return;
+        if (!user) {
+            router.push('/giris');
+            return;
+        }
         await toggleFavorite(id);
     }
 
+    const itemListJsonLd = useMemo(() => {
+        if (!listings || listings.length === 0) return null;
+        return generateItemListJsonLd(listings);
+    }, [listings]);
+
     return (
         <div className="min-h-screen bg-slate-50 overflow-x-hidden flex flex-col relative w-full max-w-[100vw]">
+            {itemListJsonLd && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+                />
+            )}
+            <PatiBackground />
             <AppHeader onSearch={setSearchQuery} />
+            <DailyVisitsBanner />
             <FilterBar filters={filters} onFilterChange={(newFilters) => setFilters(prev => ({ ...prev, ...newFilters }))} />
 
             <main className="max-w-7xl mx-auto px-4 py-4 sm:py-8 pb-28 sm:pb-8 w-full">
-                {/* VIP / Referral Banner (Growth Hack FOMO) */}
+                {/* Stories Section - Desktop Only for Minimalism */}
+                <div className="hidden sm:block">
+                    <StoryBar />
+                </div>
 
+                {/* Ultra-Minimalist Mobile AI Vet Banner */}
+                <div className="sm:hidden mb-6 px-0.5">
+                    <Link
+                        href="/ai-veteriner"
+                        className="relative overflow-hidden bg-white border-[0.5px] border-slate-200 rounded-[2rem] p-4 block active:scale-[0.97] transition-all shadow-sm"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                {/* Animated Robot Head */}
+                                <div className="relative">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-indigo-600 border border-slate-200 shadow-inner overflow-hidden">
+                                        <svg className="w-7 h-7 animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                                        </svg>
+                                    </div>
+                                    <div className="absolute -right-1 -top-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></div>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">PatiAI Veteriner</h4>
+                                    <p className="text-sm font-black text-slate-900 tracking-tight">Klinik Zeka Asistanı</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100 italic">
+                                <span className="text-[10px] font-black text-orange-600 uppercase tracking-tighter">KEŞFET</span>
+                                <svg className="w-3 h-3 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Subtle background glow */}
+                        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-50 rounded-full blur-2xl opacity-60"></div>
+                    </Link>
+                </div>
 
                 {/* Premium Ultra-Compact Mobile Action Grid - 4 Columns */}
                 <div className="sm:hidden grid grid-cols-4 gap-2 mb-10 px-0.5">
@@ -241,54 +316,87 @@ function HomePageContent() {
                         <span className="font-bold text-[10px] text-slate-800 tracking-tight leading-none">Nakil</span>
                     </Link>
 
-                    {/* Kan Bağışı */}
-                    <Link href="/ilan-olustur?hizli=kan-bagisi" className="group bg-white border-[0.5px] border-slate-200 p-2 rounded-xl active:scale-[0.96] transition-all duration-150 flex flex-col items-center text-center">
-                        <div className="w-9 h-9 rounded-lg bg-red-800 text-white flex items-center justify-center mb-1.5 shadow-sm">
+                    {/* Destek / Hediye */}
+                    <Link href="/ilan-olustur?hizli=bedelsiz" className="group bg-white border-[0.5px] border-slate-200 p-2 rounded-xl active:scale-[0.96] transition-all duration-150 flex flex-col items-center text-center">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center mb-1.5 shadow-sm">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
                             </svg>
                         </div>
-                        <span className="font-bold text-[10px] text-slate-800 tracking-tight leading-none">Kan Bağışı</span>
+                        <span className="font-bold text-[10px] text-slate-800 tracking-tight leading-none">Destek</span>
                     </Link>
                 </div>
 
-                {/* Desktop Premium Dashboard Row: Side Trackers + Slim Hero Bar */}
-                <div className="hidden sm:grid lg:grid-cols-[minmax(280px,320px)_1fr_minmax(280px,320px)] gap-6 mb-8 items-stretch">
+                {/* Desktop Premium Bento Dashboard: Side Trackers + Integrated Hero */}
+                <div className="hidden sm:grid lg:grid-cols-[280px_1fr_280px] xl:grid-cols-[300px_1fr_300px] gap-6 mb-12 items-stretch">
                     {/* Left: New Users */}
                     <NewUsersTracker totalUsers={stats.users} />
 
-                    {/* Center: Slim Hero Bar */}
-                    <div className="flex bg-white rounded-[2rem] px-8 py-6 border border-slate-200 shadow-[0_2px_12px_rgba(0,0,0,0.03)] relative items-center justify-between group overflow-hidden border-b-4 border-b-indigo-500/10">
-                        <div className="absolute -right-6 -top-6 w-32 h-32 bg-slate-50 rounded-full blur-3xl opacity-50 group-hover:bg-indigo-50 transition-colors"></div>
+                    {/* Center: High-Performance Hero Stack */}
+                    <div className="flex flex-col gap-6">
+                        {/* Dynamic Banner */}
+                        <div className="flex-1 bg-white rounded-[2.5rem] px-10 py-10 border border-slate-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.02)] relative flex flex-col justify-center animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                            {/* Subtle Accents */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/30 rounded-full blur-[100px] -mr-32 -mt-32"></div>
+                            <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-50/30 rounded-full blur-[80px] -ml-24 -mb-24"></div>
 
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-3 mb-1.5">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bannerData.iconColor}`}>
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={bannerData.icon} />
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-white/50 ${bannerData.iconColor}`}>
+                                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={bannerData.icon} />
+                                        </svg>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-1">Pati Ağı • Premium</span>
+                                        <h1 className="text-3xl xl:text-4xl font-black tracking-tight text-slate-900 leading-none">
+                                            {bannerData.title}
+                                        </h1>
+                                    </div>
+                                </div>
+                                <p className="text-base leading-relaxed font-medium text-slate-500 max-w-xl">
+                                    {bannerData.desc}
+                                </p>
+
+                                <div className="flex items-center gap-3 mt-8">
+                                    {bannerData.badges.map(bg => (
+                                        <span key={bg} className="px-4 py-1.5 bg-slate-50 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-full border border-slate-100 shadow-sm">
+                                            {bg}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* AI Access Bar - Compact & High Energy */}
+                        <Link
+                            href="/ai-veteriner"
+                            className="bg-slate-900 hover:bg-zinc-800 text-white p-5 rounded-[2rem] flex items-center justify-between group transition-all duration-300 shadow-xl shadow-slate-200 border border-slate-700 active:scale-[0.98]"
+                        >
+                            <div className="flex items-center gap-5">
+                                <div className="relative">
+                                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white ring-1 ring-white/20 group-hover:scale-110 group-hover:bg-indigo-600 transition-all duration-500">
+                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                                        </svg>
+                                    </div>
+                                    <div className="absolute -right-1 -top-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-900 animate-pulse"></div>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-black uppercase tracking-[0.15em] text-indigo-400 leading-none mb-1.5">AI Veteriner Merkezi</h4>
+                                    <p className="text-sm font-black text-white group-hover:text-indigo-100 transition-colors tracking-tight">Klinik Zeka Asistanı & Teşhis</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest hidden lg:block opacity-0 group-hover:opacity-100 transition-opacity">Uzmana Sor</span>
+                                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white group-hover:text-slate-900 transition-all shadow-inner">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                     </svg>
                                 </div>
-                                <h1 className="text-xl lg:text-2xl font-black tracking-tight text-slate-900 leading-tight">
-                                    {bannerData.title}
-                                </h1>
                             </div>
-                            <p className="text-[13px] leading-relaxed font-medium text-slate-500 max-w-md line-clamp-2">
-                                {bannerData.desc}
-                            </p>
-                            <div className="flex gap-2 mt-3 overflow-x-auto scrollbar-hide">
-                                {bannerData.badges.map(badge => (
-                                    <span key={badge} className="whitespace-nowrap px-2.5 py-1 rounded-lg text-[10px] font-black border border-slate-100 bg-slate-50 text-slate-600 uppercase tracking-tighter">
-                                        {badge}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Minimalist Decoration for the 'Bar' feel */}
-                        <div className="hidden xl:flex flex-col items-end shrink-0 pl-4 border-l border-slate-100">
-                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1">EldenEle.PRO</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Premium Network</span>
-                        </div>
+                        </Link>
                     </div>
 
                     {/* Right: Community Activity */}
@@ -322,6 +430,15 @@ function HomePageContent() {
                         >
                             İlanlar
                         </button>
+                        <button
+                            onClick={() => setFilters({ ...filters, tab: 'discover' })}
+                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 sm:px-5 py-1.5 sm:py-2 rounded-md font-bold text-[13px] sm:text-sm transition-all ${filters.tab === 'discover' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <span className="flex items-center gap-2 justify-center">
+                                Arkadaş Edin
+                                <span className="bg-emerald-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-black animate-pulse uppercase">Yeni</span>
+                            </span>
+                        </button>
                     </div>
 
                     {filters.tab === 'ilanlar' && (
@@ -344,8 +461,8 @@ function HomePageContent() {
 
                             <div className="flex items-center gap-2">
                                 <h2 className="font-bold text-slate-800 text-lg hidden sm:block">
-                                    {featuredListings.length + regularListings.length > 0
-                                        ? `${featuredListings.length + regularListings.length} ilan bulundu`
+                                    {featuredListings.length + newArrivals.length + remainingListings.length > 0
+                                        ? `${featuredListings.length + newArrivals.length + remainingListings.length} ilan bulundu`
                                         : 'İlanlar'}
                                 </h2>
                             </div>
@@ -364,11 +481,13 @@ function HomePageContent() {
                         }).slice(0, 10)}
                         onNavigateToListings={() => setFilters({ ...filters, tab: 'ilanlar' })}
                     />
+                ) : filters.tab === 'discover' ? (
+                    <FriendFinder />
                 ) : (
                     <>
                         {loading ? (
                             <PetLoading />
-                        ) : featuredListings.length === 0 && regularListings.length === 0 ? (
+                        ) : featuredListings.length === 0 && newArrivals.length === 0 && remainingListings.length === 0 ? (
                             <div className="text-center py-20 bg-white border border-slate-200 rounded-3xl shadow-sm">
                                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-slate-100">
                                     <svg className="w-10 h-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -388,7 +507,7 @@ function HomePageContent() {
                             // Render depending on viewMode
                             viewMode === 'map' ? (
                                 <div className="fade-in-up mt-4">
-                                    <DynamicMapView listings={[...featuredListings, ...regularListings]} />
+                                    <DynamicMapView listings={[...featuredListings, ...newArrivals, ...remainingListings]} />
                                 </div>
                             ) : (
                                 <div className="fade-in-up">
@@ -411,20 +530,36 @@ function HomePageContent() {
                                         </div>
                                     )}
 
-                                    {regularListings.length > 0 && (
-                                        <div>
-                                            {featuredListings.length > 0 && (
-                                                <h3 className="font-extrabold text-lg lg:text-xl text-slate-900 mb-5 flex items-center gap-2 opacity-95">
-                                                    <div className="p-1.5 bg-slate-100 rounded-lg shrink-0">
-                                                        <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4h4m-4-8a8 8 0 11-8 8 8 8 0 018-8z" />
-                                                        </svg>
-                                                    </div>
-                                                    En Yeniler
-                                                </h3>
-                                            )}
+                                    {newArrivals.length > 0 && (
+                                        <div className="mb-10 lg:mb-12">
+                                            <h3 className="font-extrabold text-lg lg:text-xl text-slate-900 mb-5 flex items-center gap-2">
+                                                <div className="p-1.5 bg-blue-50 rounded-lg shrink-0">
+                                                    <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                    </svg>
+                                                </div>
+                                                Yeni Gelenler
+                                            </h3>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                                                {regularListings.map(listing => (
+                                                {newArrivals.map(listing => (
+                                                    <ListingCard key={listing.id} listing={listing} isFavorite={favorites.includes(listing.id)} onToggleFavorite={handleToggleFavorite} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {remainingListings.length > 0 && (
+                                        <div>
+                                            <h3 className="font-extrabold text-lg lg:text-xl text-slate-900 mb-5 flex items-center gap-2 opacity-95">
+                                                <div className="p-1.5 bg-slate-100 rounded-lg shrink-0">
+                                                    <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4h4m-4-8a8 8 0 11-8 8 8 8 0 018-8z" />
+                                                    </svg>
+                                                </div>
+                                                Tüm İlanlar
+                                            </h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                                                {remainingListings.map(listing => (
                                                     <ListingCard key={listing.id} listing={listing} isFavorite={favorites.includes(listing.id)} onToggleFavorite={handleToggleFavorite} />
                                                 ))}
                                             </div>
@@ -443,7 +578,11 @@ function HomePageContent() {
 
 export default function HomePage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <PetLoading message="Pati dünyası hazırlanıyor..." />
+            </div>
+        }>
             <HomePageContent />
             <NewsPopup />
         </Suspense>
